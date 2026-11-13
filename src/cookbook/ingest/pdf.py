@@ -34,6 +34,11 @@ BIG_IMAGE_COVERAGE = 0.80  # one image covering >= 80% of the page = a scan
 MIN_QUALITY = 0.60  # below this the text layer is not trusted
 MIN_IMAGE_COVERAGE = 0.02  # images smaller than 2% of the page are ignored (icons, rules)
 
+# Rendering for a vision model: enough pixels to read, never more than the source has.
+MAX_DPI = 200  # upper bound for pages with no photo underneath (typed pages)
+MAX_SIDE_PX = 2400  # longest side of an image sent to a model
+JPEG_QUALITY = 90
+
 OCR_TOOLS = (
     "ocr", "tesseract", "abbyy", "finereader", "adobe scan", "ocrmypdf",
     "paperport", "omnipage", "readiris", "camscanner", "genius scan",
@@ -284,21 +289,54 @@ def merge_page_text(page: PageResult, image_texts: dict[int, str]) -> str:
     return "\n\n".join(t for _, t in items)
 
 
-def render_page(path: str | Path, page_no: int, dpi: int = 200) -> bytes:
-    """PNG bytes of a whole page, for pages whose strategy is VISION.
+def _render_scale(page: pymupdf.Page, area: pymupdf.Rect) -> float:
+    """Pixels per PDF point to render `area` at.
+
+    A fixed dpi is wrong for photo PDFs: a phone's "save as PDF" makes the page
+    as many points as the photo has pixels, so 200 dpi would stretch it almost
+    3x and add pixels but no detail (and a 40 MB upload). So the scale is the
+    smallest of:
+      - MAX_DPI (typed pages have no photo to be faithful to),
+      - the scale that makes the longest side MAX_SIDE_PX,
+      - the resolution of the photo that covers the area, if there is one.
+    """
+    scale = min(MAX_DPI / 72, MAX_SIDE_PX / max(area.width, area.height))
+    for info in page.get_image_info():
+        box = pymupdf.Rect(info["bbox"])
+        covered = box & area
+        if not covered.is_empty and covered.width * covered.height >= 0.8 * area.width * area.height:
+            scale = min(scale, info["width"] / box.width)  # photo pixels per point
+            break
+    return scale
+
+
+def _encode(pix: pymupdf.Pixmap, fmt: str) -> bytes:
+    if fmt == "jpeg":  # about 5x smaller than PNG for a photo
+        return pix.tobytes("jpeg", jpg_quality=JPEG_QUALITY)
+    if fmt == "png":
+        return pix.tobytes("png")
+    raise ValueError(f"unknown image format {fmt!r}")
+
+
+def render_page(path: str | Path, page_no: int, fmt: str = "jpeg") -> bytes:
+    """Image bytes (JPEG or PNG) of a whole page, for pages whose strategy is VISION.
 
     Rendering what is *displayed* (rather than pulling out the embedded image)
     keeps rotation and cropping as the reader sees them.
     """
     with pymupdf.open(path) as doc:
-        return doc[page_no - 1].get_pixmap(dpi=dpi).tobytes("png")
+        page = doc[page_no - 1]
+        scale = _render_scale(page, page.rect)
+        return _encode(page.get_pixmap(matrix=pymupdf.Matrix(scale, scale)), fmt)
 
 
-def render_task(path: str | Path, page_no: int, task: ExtractionTask, dpi: int = 200) -> bytes:
-    """PNG bytes of one image region (an extra task on a text page)."""
+def render_task(path: str | Path, page_no: int, task: ExtractionTask, fmt: str = "jpeg") -> bytes:
+    """Image bytes (JPEG or PNG) of one image region (an extra task on a text page)."""
     with pymupdf.open(path) as doc:
+        page = doc[page_no - 1]
         clip = pymupdf.Rect(task.bbox)
-        return doc[page_no - 1].get_pixmap(dpi=dpi, clip=clip).tobytes("png")
+        scale = _render_scale(page, clip)
+        return _encode(page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), clip=clip), fmt)
 
 
 # --- public API --------------------------------------------------------------

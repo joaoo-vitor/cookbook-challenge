@@ -1,7 +1,7 @@
 """Stage 2a: get the text of every page, reading scans with a vision model.
 
 Digital pages use their text layer and never call the model. Pages the ingest
-stage labels VISION are rendered to PNG and transcribed. Images on a typed page
+stage labels VISION are rendered to a JPEG and transcribed. Images on a typed page
 (ingest's extra tasks) are transcribed and merged back by position.
 """
 
@@ -36,7 +36,7 @@ class PageTranscript:
     calls: list[LLMResult] = field(default_factory=list)  # model calls made for this page
 
 
-def transcribe_pdf(path: str | Path, llm: VisionLLM, dpi: int = 200,
+def transcribe_pdf(path: str | Path, llm: VisionLLM,
                    pages: set[int] | None = None) -> list[PageTranscript]:
     """Return the text of each page (optionally only the given 1-based pages)."""
     out = []
@@ -44,12 +44,12 @@ def transcribe_pdf(path: str | Path, llm: VisionLLM, dpi: int = 200,
         if pages and r.page not in pages:
             continue
         if r.strategy is Strategy.VISION:
-            res = llm.transcribe(render_page(path, r.page, dpi), PROMPT)
+            res = llm.transcribe(render_page(path, r.page), PROMPT)
             out.append(PageTranscript(r.page, r.strategy, "vision", res.text.strip(), [res]))
         elif r.strategy is Strategy.EMPTY:
             out.append(PageTranscript(r.page, r.strategy, "none", ""))
         else:  # TEXT_DIGITAL or TEXT_OCR
-            calls = [llm.transcribe(render_task(path, r.page, t, dpi), PROMPT) for t in r.tasks]
+            calls = [llm.transcribe(render_task(path, r.page, t), PROMPT) for t in r.tasks]
             text = merge_page_text(r, {i: c.text for i, c in enumerate(calls)})
             out.append(PageTranscript(r.page, r.strategy, "text_layer", text.strip(), calls))
     return out

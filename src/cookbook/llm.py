@@ -35,7 +35,16 @@ class LLMResult:
 class VisionLLM(Protocol):
     name: str
 
-    def transcribe(self, image_png: bytes, prompt: str) -> LLMResult: ...
+    def transcribe(self, image: bytes, prompt: str) -> LLMResult: ...
+
+
+def sniff_mime(image: bytes) -> str:
+    """Image type from the first bytes (the file's "magic bytes"), PNG or JPEG."""
+    if image.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if image.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    raise ValueError("unsupported image format: expected PNG or JPEG bytes")
 
 
 # --- cache -------------------------------------------------------------------
@@ -93,8 +102,9 @@ class GeminiClient:
     def list_models(self) -> list[str]:
         return [m.name for m in self._client.models.list()]
 
-    def transcribe(self, image_png: bytes, prompt: str) -> LLMResult:
-        key = cache_key(self.name, self.model, prompt, image_png)
+    def transcribe(self, image: bytes, prompt: str) -> LLMResult:
+        mime = sniff_mime(image)
+        key = cache_key(self.name, self.model, prompt, image)
         hit = read_cache(self.cache_dir, key)
         if hit:
             return hit
@@ -104,7 +114,7 @@ class GeminiClient:
         start = time.perf_counter()
         response = self._client.models.generate_content(
             model=self.model,
-            contents=[types.Part.from_bytes(data=image_png, mime_type="image/png"), prompt],
+            contents=[types.Part.from_bytes(data=image, mime_type=mime), prompt],
             config=types.GenerateContentConfig(temperature=0),
         )
         usage = getattr(response, "usage_metadata", None)

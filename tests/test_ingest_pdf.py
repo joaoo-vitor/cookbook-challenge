@@ -4,8 +4,8 @@ import pymupdf
 import pytest
 
 from cookbook.ingest.pdf import (
-    Signals, Strategy, analyze_pdf, decide, merge_page_text, render_page, render_task,
-    text_quality,
+    MAX_SIDE_PX, Signals, Strategy, analyze_pdf, decide, merge_page_text, render_page,
+    render_task, text_quality,
 )
 
 GOOD = "Zwiebeln in Scheiben schneiden und mit Essig und Wasser aufkochen. Salz und Pfeffer dazugeben."
@@ -172,27 +172,73 @@ def test_merge_ignores_images_without_text(tmp_path, answer):
     assert merge_page_text(r, {0: answer}) == r.text
 
 
-def test_render_task_returns_png_of_the_region(tmp_path):
+JPEG_MAGIC = b"\xff\xd8\xff"
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+
+def _save(doc, tmp_path):
+    path = tmp_path / "t.pdf"
+    doc.save(path)
+    return path
+
+
+def _size(image: bytes) -> tuple[int, int]:
+    pix = pymupdf.Pixmap(image)
+    return pix.width, pix.height
+
+
+def test_render_task_is_a_jpeg_at_the_photos_own_resolution(tmp_path):
     doc = pymupdf.open()
     _mixed_page(doc)
-    path = tmp_path / "t.pdf"
-    doc.save(path)
+    path = _save(doc, tmp_path)
     [r] = analyze_pdf(path)
-    png = render_task(path, 1, r.tasks[0], dpi=72)
-    assert png[:8] == b"\x89PNG\r\n\x1a\n"
-    pix = pymupdf.Pixmap(png)
-    assert (pix.width, pix.height) == (300, 150)  # the region's size at 72 dpi
+    image = render_task(path, 1, r.tasks[0])
+    assert image.startswith(JPEG_MAGIC)
+    native_w, _ = _size(_scan_png())  # the photo placed in the 300x150 pt box
+    w, h = _size(image)
+    assert abs(w - native_w) <= 2  # not stretched beyond the photo's pixels
+    assert abs(w / h - 2.0) < 0.02  # the region's 2:1 shape
 
 
-def test_render_page_returns_png_of_the_whole_page(tmp_path):
+def test_render_page_of_a_scan_never_upscales_the_photo(tmp_path):
+    doc = pymupdf.open()
+    _scan_page(doc)  # A4 page holding a bitmap smaller than 200 dpi
+    path = _save(doc, tmp_path)
+    image = render_page(path, 1)
+    assert image.startswith(JPEG_MAGIC)
+    native_w, native_h = _size(_scan_png())
+    w, h = _size(image)
+    assert abs(w - native_w) <= 2 and abs(h - native_h) <= 2
+
+
+def test_render_page_of_a_typed_page_uses_at_most_200_dpi(tmp_path):
+    doc = pymupdf.open()
+    doc.new_page().insert_text((50, 100), GOOD, fontsize=11)  # no photo underneath
+    path = _save(doc, tmp_path)
+    w, h = _size(render_page(path, 1))
+    assert abs(h - round(842 * 200 / 72)) <= 3 and max(w, h) <= MAX_SIDE_PX
+
+
+def test_render_page_caps_a_huge_photo_page_at_max_side(tmp_path):
+    # Like a phone's "save as PDF": the page is as many points as the photo has pixels.
+    pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 1702, 2451))
+    pix.clear_with(255)
+    doc = pymupdf.open()
+    page = doc.new_page(width=1702, height=2451)
+    page.insert_image(page.rect, stream=pix.tobytes("png"))
+    path = _save(doc, tmp_path)
+    w, h = _size(render_page(path, 1))
+    assert abs(h - MAX_SIDE_PX) <= 1 and w < h
+    assert len(render_page(path, 1)) < 1_000_000  # a blank page is tiny, not tens of MB
+
+
+def test_render_png_option_and_unknown_format(tmp_path):
     doc = pymupdf.open()
     _scan_page(doc)
-    path = tmp_path / "t.pdf"
-    doc.save(path)
-    png = render_page(path, 1, dpi=72)
-    assert png[:8] == b"\x89PNG\r\n\x1a\n"
-    pix = pymupdf.Pixmap(png)
-    assert (pix.width, pix.height) == (595, 842)  # A4 at 72 dpi
+    path = _save(doc, tmp_path)
+    assert render_page(path, 1, fmt="png").startswith(PNG_MAGIC)
+    with pytest.raises(ValueError):
+        render_page(path, 1, fmt="gif")
 
 
 # --- pure functions ----------------------------------------------------------

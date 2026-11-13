@@ -4,8 +4,11 @@ import pymupdf
 
 from cookbook.extract.transcribe import PROMPT, number_lines, transcribe_pdf
 from cookbook.ingest.pdf import Strategy
-from cookbook.llm import LLMResult, cache_key, read_cache, write_cache
+import pytest
 
+from cookbook.llm import LLMResult, cache_key, read_cache, sniff_mime, write_cache
+
+JPEG_MAGIC = b"\xff\xd8\xff"
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 GOOD = "Zwiebeln in Scheiben schneiden und mit Essig und Wasser aufkochen. Salz und Pfeffer dazugeben."
 
@@ -19,8 +22,8 @@ class FakeLLM:
         self.answer = answer
         self.calls = []
 
-    def transcribe(self, image_png, prompt):
-        self.calls.append((image_png, prompt))
+    def transcribe(self, image, prompt):
+        self.calls.append((image, prompt))
         return LLMResult(self.answer, "fake-model", 10, 5, 0.0)
 
 
@@ -45,7 +48,7 @@ def test_scanned_page_is_rendered_and_sent_to_the_model(tmp_path):
     assert t.strategy is Strategy.VISION and t.source == "vision"
     assert t.text == llm.answer
     [(image, prompt)] = llm.calls
-    assert image.startswith(PNG_MAGIC) and prompt == PROMPT
+    assert image.startswith(JPEG_MAGIC) and prompt == PROMPT
 
 
 def test_digital_page_never_calls_the_model(tmp_path):
@@ -84,6 +87,13 @@ def test_number_lines_skips_blank_lines():
 
 def test_prompt_forbids_correction_and_guessing_numbers():
     assert "Do not correct" in PROMPT and "Never guess a number" in PROMPT
+
+
+def test_sniff_mime_reads_the_first_bytes():
+    assert sniff_mime(PNG_MAGIC + b"rest") == "image/png"
+    assert sniff_mime(JPEG_MAGIC + b"rest") == "image/jpeg"
+    with pytest.raises(ValueError):
+        sniff_mime(b"GIF89a....")
 
 
 # --- cache --------------------------------------------------------------------

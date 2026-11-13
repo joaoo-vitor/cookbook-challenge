@@ -19,7 +19,6 @@ def main() -> int:
     ap.add_argument("--provider", default="gemini", choices=["gemini"])
     ap.add_argument("--model", help="model name (default: GEMINI_MODEL or the built-in alias)")
     ap.add_argument("--pages", help="comma-separated 1-based pages, e.g. 1,2")
-    ap.add_argument("--dpi", type=int, default=200)
     ap.add_argument("--out", default="data/experiments")
     ap.add_argument("--list-models", action="store_true", help="list models the key can use")
     args = ap.parse_args()
@@ -40,7 +39,7 @@ def main() -> int:
 
     pages = {int(p) for p in args.pages.split(",")} if args.pages else None
     try:
-        transcripts = transcribe_pdf(args.pdf, llm, dpi=args.dpi, pages=pages)
+        transcripts = transcribe_pdf(args.pdf, llm, pages=pages)
     except Exception as e:  # API errors, unreadable PDF: short message, no traceback
         print(f"error ({type(e).__name__}): {str(e)[:400]}", file=sys.stderr)
         return 1
