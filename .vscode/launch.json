@@ -1,0 +1,48 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Ingest: Recipe.pdf",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "cookbook.ingest",
+      "args": ["Recipe.pdf", "--show-text"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Ingest: choose a PDF",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "cookbook.ingest",
+      "args": ["${input:pdfPath}"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Pytest: current file",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["${file}", "-v"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Python: current file",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "pdfPath",
+      "type": "promptString",
+      "description": "Path to a PDF (relative to the project folder)",
+      "default": "Recipe.pdf"
+    }
+  ]
+}
