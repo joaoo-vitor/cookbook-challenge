@@ -20,7 +20,7 @@ It never calls an LLM. It only decides what to do. Later stages do the reading.
 |---|---|---|
 | `TEXT_DIGITAL` | real typed text, no OCR signs | use the text |
 | `TEXT_OCR` | OCR layer over a scan, quality is acceptable | use the text, mark it as machine-read |
-| `VISION` | no text, or a text layer of poor quality | render the page to PNG and send it to a vision model |
+| `VISION` | no text, or a text layer of poor quality | render the page to an image and send it to a vision model |
 | `EMPTY` | no text, no meaningful image | skip |
 
 ### Extra tasks
@@ -99,6 +99,9 @@ All thresholds live together at the top:
 | `BIG_IMAGE_COVERAGE` | 0.80 | one image covering at least 80% of the page means a scan |
 | `MIN_QUALITY` | 0.60 | below this the text layer is not trusted |
 | `MIN_IMAGE_COVERAGE` | 0.02 | images under 2% of the page are ignored |
+| `MAX_DPI` | 200 | upper bound for rendering a page that has no photo underneath |
+| `MAX_SIDE_PX` | 2400 | longest side, in pixels, of an image sent to a model |
+| `JPEG_QUALITY` | 90 | quality of the JPEG sent to a model |
 
 Lists (compare in lowercase):
 - `OCR_TOOLS = ("ocr", "tesseract", "abbyy", "finereader", "adobe scan", "ocrmypdf", "paperport", "omnipage", "readiris", "camscanner", "genius scan")`
@@ -194,9 +197,18 @@ Decision table:
 - Otherwise add every `TextBlock` as `(bbox, text)`, sort by `(bbox[1], bbox[0])` (top to bottom, then left to right) and join with `"\n\n"`.
 - Known limit: this is wrong for multi-column layouts.
 
-**`render_page(path, page_no, dpi=200) -> bytes`**: open the PDF and return `doc[page_no - 1].get_pixmap(dpi=dpi).tobytes("png")`. Used for `VISION` pages.
+**`_render_scale(page, area) -> float`**: pixels per PDF point to render `area` at. A fixed dpi is wrong for photo PDFs, because a phone's "save as PDF" makes the page as many points as the photo has pixels, so 200 dpi would stretch the photo almost 3 times and add no detail. The scale is the smallest of:
+- `MAX_DPI / 72`,
+- `MAX_SIDE_PX / max(area.width, area.height)`,
+- the photo's own resolution (`info["width"] / bbox.width`) when an image covers at least 80% of `area`.
 
-**`render_task(path, page_no, task, dpi=200) -> bytes`**: the same, with `clip=pymupdf.Rect(task.bbox)`. Rendering what is displayed (rather than extracting the embedded image) keeps rotation and cropping.
+**`_encode(pix, fmt)`**: `pix.tobytes("jpeg", jpg_quality=JPEG_QUALITY)` for `"jpeg"` (the default, about 5 times smaller than PNG for a photo), `pix.tobytes("png")` for `"png"`, otherwise `ValueError`.
+
+**`render_page(path, page_no, fmt="jpeg") -> bytes`**: render the whole page with `page.get_pixmap(matrix=Matrix(scale, scale))` and encode it. Used for `VISION` pages.
+
+**`render_task(path, page_no, task, fmt="jpeg") -> bytes`**: the same, with `clip=pymupdf.Rect(task.bbox)`. Rendering what is displayed (rather than extracting the embedded image) keeps rotation and cropping.
+
+The Gemini client in `llm.py` reads the image type from the first bytes (`sniff_mime`: PNG `89 50 4E 47`, JPEG `FF D8 FF`) instead of assuming one.
 
 ## 7. Public entry point
 
@@ -248,7 +260,7 @@ Helpers (test setup, often called fixtures):
 
 Use a good sentence (`GOOD`) for clean text and a string full of symbols, lone letters and digit-letter mixes (`GARBAGE`) for bad OCR.
 
-Tests to write (28 cases in total, counting parametrized ones):
+Tests to write (31 cases in total, counting parametrized ones):
 1. Typed page gives `TEXT_DIGITAL` and the text is extracted.
 2. Scan gives `VISION` (0 characters, big image).
 3. Scan with a good invisible layer gives `TEXT_OCR`.
@@ -264,17 +276,17 @@ Tests to write (28 cases in total, counting parametrized ones):
 13. A `TEXT_OCR` page has no tasks.
 14. `merge_page_text` with `{0: "Rosinen 100 g"}` puts that text between the top and bottom paragraphs and includes `[from image, page 1]`.
 15. `merge_page_text` ignores answers `"NONE"`, `"none"`, `"  "`, `""` and returns `page.text` (parametrized, 4 cases).
-16. `render_task` returns PNG bytes (starts with `b"\x89PNG\r\n\x1a\n"`) of size 300x150 at 72 dpi.
-17. `render_page` returns a PNG of 595x842 at 72 dpi (A4).
+16. `render_task` returns a JPEG (starts with `b"\xff\xd8\xff"`) at the photo's own resolution, not stretched, with the region's 2:1 shape.
+17. `render_page` of a scan never upscales the photo. A typed A4 page renders at most 200 dpi (height about 2339 px). A page as large as its photo (1702x2451 points) is capped at `MAX_SIDE_PX`, and a blank one is under 1 MB. `fmt="png"` works and an unknown format raises `ValueError`.
 18. `text_quality(GOOD) > 0.8`, `text_quality(GARBAGE) < 0.5`, `text_quality("kurz") is None`.
 19. A table of `Signals` combinations for `decide` (parametrized, 7 cases) including: "big image alone stays `TEXT_DIGITAL`", "big image plus OCR producer gives `TEXT_OCR`", "invisible text plus low quality gives `VISION`", "low quality alone gives `VISION`".
 
 ## 11. Acceptance checks
 
 ```powershell
-pytest
+pytest tests/test_ingest_pdf.py
 ```
-Expected: `28 passed`.
+Expected: `31 passed`. (The whole suite, including the extract tests, is 41.)
 
 ```powershell
 python -m cookbook.ingest Recipe.pdf
@@ -295,6 +307,7 @@ page 2: VISION
 - **Windows shell:** `PYTHONPATH=src python ...` only works in Git Bash. In PowerShell use `$env:PYTHONPATH = "src"`, or install the project instead.
 - **Thresholds are guesses:** the quality threshold (0.60) is validated only on synthetic OCR layers. Try it on a real OCR'd PDF before trusting it.
 - **Do not count a big image as OCR proof:** typed pages with background pictures would be misrouted.
+- **Do not render at a fixed 200 dpi:** the first version did, and for the phone-made `Recipe.pdf` (pages as many points as the photo has pixels) it produced a 41 MB, 4728x6809 px PNG per page that added no detail and made the model call slow. Choose the scale from the page and the photo (see `_render_scale`), and send a JPEG.
 
 ## 13. Not done yet
 

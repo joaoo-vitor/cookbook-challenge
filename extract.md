@@ -6,7 +6,7 @@ Status: planning. Nothing here is built yet. Items marked **(unverified)** came 
 
 Turn the pages that ingest produces into a structured recipe: ingredients, tools, steps, servings. Every value must be traceable to the source, and anything guessed must be marked as a guess.
 
-Input: `analyze_pdf` results, `render_page` (PNG for `VISION` pages), `render_task` (PNG for an image region), `merge_page_text`. See [ingest.md](ingest.md).
+Input: `analyze_pdf` results, `render_page` (JPEG for `VISION` pages), `render_task` (JPEG for an image region), `merge_page_text`. See [ingest.md](ingest.md).
 
 ## 2. Decisions so far
 
@@ -85,7 +85,7 @@ All model calls go through one small module so the backend can change:
 
 ```python
 class VisionLLM(Protocol):
-    def transcribe(self, image_png: bytes, prompt: str) -> str: ...
+    def transcribe(self, image: bytes, prompt: str) -> LLMResult: ...
     def structure(self, text: str, schema: dict, prompt: str) -> dict: ...
 ```
 
