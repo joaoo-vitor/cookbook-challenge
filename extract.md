@@ -1,6 +1,6 @@
 # Extract stage: working plan
 
-Status: planning. Nothing here is built yet. Items marked **(unverified)** came from web searches or my own recollection and must be checked before relying on them.
+Status: transcription with Gemini is built and tested (see [README.md](README.md)). The two-model check, structuring and validation are still planned. Items marked **(unverified)** came from web searches or my own recollection and must be checked before relying on them.
 
 ## 1. Goal
 
@@ -13,10 +13,11 @@ Input: `analyze_pdf` results, `render_page` (JPEG for `VISION` pages), `render_t
 | Topic | Decision |
 |---|---|
 | Call design | Two calls: **transcribe** (vision), then **structure** (text to schema) |
-| Confidence | The model marks unreadable words as `[?word?]`. Numbers get a **second read**, and a disagreement lowers confidence |
+| Confidence | **Two reads, one per model.** Where the two reads differ, the word or number is flagged as not certain. A page where the two reads mostly disagree is flagged as unreliable. The `[?word?]` marker stays in the prompt, but only as an extra warning: models use it unreliably (section 5.3) |
 | Failed checks | Keep the value and flag it. Never drop silently |
 | Check style | Plain deterministic code (grounding, number match, coverage, integrity) |
-| Model | **Gemini first** (free API tier), then one or two other candidates, all behind a provider interface. Hugging Face and Claude Haiku 5.5 stay as options (see sections 4 and 5) |
+| Model | **Gemini on the free API tier**, behind a provider interface. Primary reader `gemini-3.1-flash-lite`, second reader `gemini-3.5-flash-lite` (section 5.3). Hugging Face and Claude Haiku 5.5 stay as options |
+| Images sent | A JPEG at the photo's own resolution, at most 2400 px on the longest side (never a fixed 200 dpi, see [ingest.md](ingest.md)) |
 | NER | Not used. The schema-guided model call handles classification and relations. We keep the "span" idea: each value cites a transcript line and quote |
 
 ## 3. Constraints we found
@@ -39,7 +40,7 @@ Input: `analyze_pdf` results, `render_page` (JPEG for `VISION` pages), `render_t
 | **Local on CPU** (for example a small Qwen VL via `transformers` or a GGUF runtime) | free | No account, no limits | Slow on this CPU (minutes per page is plausible), memory-tight, large download |
 | **Free GPU notebook** (for example Colab) | free | Fast enough for a 7B model | Not part of the repo's run path. Only useful for trying models and building the eval |
 
-Suggested start: try **hosted HF first** for speed of development, and keep **local** as a fallback if credits run out. Decide after the live pricing check.
+Superseded: the Gemini free tier worked from the first request and is what we use (section 5.3). Hugging Face and local models stay as fallbacks if Gemini becomes unavailable.
 
 ## 5. Candidate models (all unverified, check each model card)
 
@@ -79,6 +80,19 @@ Gemini's own chat answer about free versus paid tiers was pasted in. It is model
 
 Experiment plan: transcribe page 1 and page 2 of `Recipe.pdf` with Gemini, save the text and token usage to `data/experiments/` (gitignored), then compare against lines you read by hand. Repeat with the next candidate and compare. Record for each: misread words and quantities, notes marked `[?...?]`, tokens, latency, and whether it corrected old spelling.
 
+### 5.3 What the experiments showed
+
+All numbers come from two pages of one recipe, so they are a rough signal, not an evaluation. The reference transcript is a model output (`gemini-3.8-flash`) that was checked by eye against the clean pages; there is no hand-made ground truth yet. Scripts: [evals/](evals/README.md).
+
+- **Model names change and retire.** `gemini-flash-latest` and `gemini-2.5-flash` returned 404 for our key. Always list the models first (`python -m cookbook.extract --list-models`).
+- **Clean pages:** all tested Gemini models read both pages almost perfectly. `gemini-3.1-flash-lite` matched the reference apart from a dash and a hyphen. `gemini-3.5-flash-lite` made real errors ("Josefs" for "Josefines", dropped the page number) and merged lines, which breaks line ids.
+- **Degraded pages** (one third resolution, heavy JPEG, rotated, one sixth resolution): similarity to the reference stayed at 0.96 to 0.99. Numbers ("1/2 l", "4 Zwiebeln", "8 Tagen") were never wrong. The weaker model made small word errors ("Mühren" for "Möhren", "Bratentond").
+- **The `[?word?]` marker is unreliable.** On the readable pages (including degraded ones) no model ever wrote one, even when it made a mistake. On illegible copies (150 px and 90 px wide) the models wrote some markers, but one model also wrote about 25 lines of plausible, wrong text with no marker, and invented numbers ("1884" for 1887, "1/2 Stunde"). So the model's own doubt cannot be the confidence signal.
+- **Disagreement between two models is a good signal.** Word agreement between `gemini-3.1-flash-lite` and `gemini-3.5-flash-lite` was 0.92 to 0.99 on readable pages, 0.75 on one barely readable page, and 0.05 to 0.19 on the illegible ones. On the five readable variants, comparing the two flagged 10 of the 11 wrong tokens in the primary model's output, and about a third of the flagged spans were noise (a dropped page number, a stray dash, a split drawing label). Both readers are Gemini models, so a mistake they share would not be flagged. The 0.85 page threshold below is a guess to tune.
+- **Hidden thinking tokens:** `gemini-3.5-flash` used roughly 1,650 to 3,400 thinking tokens per page against 130 to 300 visible tokens, with little accuracy gain, so we do not use it.
+- **Image size was the main cause of slow calls.** Sending a 41 MB PNG (a fixed 200 dpi render) took 15 to 75 s per page. A JPEG of about 1 MB takes 3 to 6 s with the same transcript quality.
+- **Reliability:** repeated 503 "high demand" errors on `gemini-3.5-flash` and Gemma. The client needs retry with backoff and a fallback model.
+
 ## 6. Provider interface (`src/cookbook/llm.py`)
 
 All model calls go through one small module so the backend can change:
@@ -86,21 +100,29 @@ All model calls go through one small module so the backend can change:
 ```python
 class VisionLLM(Protocol):
     def transcribe(self, image: bytes, prompt: str) -> LLMResult: ...
-    def structure(self, text: str, schema: dict, prompt: str) -> dict: ...
+    # planned: def structure(self, text: str, schema: dict, prompt: str) -> dict: ...
 ```
 
-- A `HuggingFaceClient` implements it now. Another provider can be added later without touching extract code.
-- Responses are cached by `hash(input, prompt, model)` in `.cache/` (gitignored), so reruns are reproducible and free.
-- The token goes in `.env` as `HF_TOKEN`, with a `.env.example` containing no real value.
-- Log token counts and latency per call for the README's cost section.
+- `GeminiClient` implements it now. Another provider can be added later without touching extract code.
+- Responses are cached by `hash(provider, model, prompt, image)` in `.cache/llm/` (gitignored), so reruns are reproducible and free.
+- The key goes in `.env` as `GEMINI_API_KEY`, with a `.env.example` containing no real value.
+- Each result carries input, output and thinking tokens and the time taken, for the README's cost section.
+- The image type is read from the first bytes (PNG or JPEG), not assumed.
+- To do: retry with backoff on 503 and 429, and a fallback model.
 
 ## 7. Pipeline
 
 ### 7.1 Transcribe (vision, only for `VISION` pages and image tasks)
-- Prompt: transcribe exactly, one line per output line, keep old spelling, write `[?word?]` for anything unreadable, do not interpret, do not fix.
-- Output: one transcript with line ids (`p1:L1`, ...), pages joined so a sentence crossing a page break stays whole. Hyphenated line ends (like "Bra-tenstücke") are joined by plain code, and the join is recorded.
-- Digital pages (`TEXT_*`) skip this and use the text layer. Image tasks use `merge_page_text`.
-- Second read: re-read only lines containing numbers or fractions, and compare.
+- Prompt: transcribe exactly, one line per output line, keep old spelling, write `[?word?]` for anything unreadable, do not interpret, do not fix. (Built.)
+- Output: one transcript with line ids (`p1:L1`, ...), pages joined so a sentence crossing a page break stays whole. Hyphenated line ends (like "Bra-tenstücke") are joined by plain code, and the join is recorded. (Line ids exist in the CLI output; the joined, structured transcript is to do.)
+- Digital pages (`TEXT_*`) skip this and use the text layer. Image tasks use `merge_page_text`. (Built.)
+- **Two reads (to do).** Each page is read by two different models (primary `gemini-3.1-flash-lite`, second `gemini-3.5-flash-lite`), in parallel. The primary reading is the transcript. Then plain code compares the two:
+  1. Normalise both (join line-end hyphens, unify dashes, ignore the `[?` `?]` brackets), then align the words.
+  2. Every span where they differ becomes a **flag** on the primary's words: "not certain". A difference in a number or fraction is a higher severity than a difference in a word.
+  3. Ignore differences that are not content: a page number present in only one read, punctuation-only changes, and the split of a drawing label across lines.
+  4. Compute a **page agreement** score (word similarity between the two reads). Below about 0.85 the whole page is flagged unreliable (a guess to tune on more pages), because on illegible pages each model invents different text.
+  5. A `[?...?]` marker in either read is also a flag.
+  No third model or re-read for now: flagged values are shown as not certain, and the reviewer decides.
 
 ### 7.2 Structure (text to schema)
 - One call turns the transcript into the schema below.
@@ -134,27 +156,32 @@ Rules: an unquantified ingredient has `quantity = null`, never a made-up number.
 
 - **More hallucination and misreads** than a large model. The validators matter more, not less.
 - **Weaker JSON discipline:** expect malformed output sometimes.
-- **Inconsistent runs:** sampling settings may not be controllable on hosted endpoints (unverified), so lean on caching and the second read for reproducibility.
+- **Inconsistent runs:** the newer Claude models reject non-default sampling settings, and hosted endpoints may too (unverified for others), so lean on caching and the two-model comparison for reproducibility.
+- **Confident invention:** on unreadable input a model can write plausible text, including numbers, with no warning (section 5.3). The page agreement check and the grounding checks exist for this.
 - **Language:** check that the model handles German handwriting at all before building on it.
 
 ## 10. Build order
 
-1. [ ] Read the live HF pricing page and try one request with a vision model (settles hosted vs local)
-2. [ ] `models.py`: schema and flag types
-3. [ ] `units.py`: parse quantities (fractions, decimals with comma) and map units, with tests
-4. [ ] `validate.py`: the seven checks, with tests using hand-written transcripts that contain planted errors (a dropped quantity, a changed number, an invented ingredient)
-5. [ ] `llm.py`: provider interface, HF client, cache, logging
-6. [ ] `transcribe.py`, then compare 2 or 3 models on page 1
-7. [ ] `structure.py`
-8. [ ] A small eval: a few lines transcribed by hand (kept out of git if copied from the recipe), scored on number accuracy and unsupported-value rate
-9. [ ] A second recipe, in a different format or language
+1. [x] Choose a provider: Gemini free tier (HF pricing check no longer needed)
+2. [x] `llm.py`: provider interface, Gemini client, cache, token and time logging
+3. [x] `transcribe.py`, and compare models on both pages, including degraded and illegible copies (section 5.3)
+4. [x] Send smaller JPEG images (a fixed 200 dpi render was the cause of slow calls)
+5. [ ] Retry with backoff and a fallback model in `llm.py`
+6. [ ] Two-model read: compare, flag differing words and numbers, page agreement score (section 7.1)
+7. [ ] A structured transcript: lines with ids, the source of each line, the model, the flags; join line-end hyphens
+8. [ ] `models.py`: schema and flag types
+9. [ ] `units.py`: parse quantities (fractions, decimals with comma) and map units, with tests
+10. [ ] `validate.py`: the seven checks, with tests using hand-written transcripts that contain planted errors (a dropped quantity, a changed number, an invented ingredient)
+11. [ ] `structure.py`
+12. [ ] A small eval: a few lines transcribed by hand (kept out of git if copied from the recipe), scored on number accuracy and unsupported-value rate
+13. [ ] A second recipe, in a different format or language, and image and plain-text input in ingest
 
-Steps 2 to 4 need no model and no network, so they can start now.
+Items 8 to 10 need no model and no network.
 
 ## 11. Open questions
 
-- Hosted or local first? (Depends on item 1 in the build order.)
-- Which models do we compare, and on how many lines?
+- Is a second reader from a different model family available and good enough? Both current readers are Gemini, so shared mistakes would go unflagged. Gemma returned a 503 and other providers are untested for handwriting.
+- Is 0.85 the right page agreement threshold? It needs more pages and a harder, more realistic set than synthetic degradation.
 - How strict is the coverage check? Numbers only, or also units and ingredient words?
 - Where does the hand-transcribed eval text live, so no page content is committed?
 
