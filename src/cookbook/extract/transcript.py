@@ -43,7 +43,7 @@ def build_transcript(pages: list[PageTranscript]) -> Transcript:
     """Join the pages' transcripts and attach the uncertainty found by comparing two readings."""
     out = Transcript()
     for page in pages:
-        for numbered in number_lines(page.page, page.text):
+        for numbered in number_lines(page.page, page.text, count_blank=page.source == "text_file"):
             line_id, _, text = numbered.partition("\t")
             out.lines[line_id] = text
         page_lines = [i for i in out.lines if i.startswith(f"p{page.page}:L")]

@@ -17,7 +17,7 @@ from pathlib import Path
 
 from cookbook.extract.compare import MIN_AGREEMENT, Comparison, compare_reads
 from cookbook.ingest.pdf import (
-    Strategy, analyze_pdf, merge_page_text, render_page, render_task,
+    Strategy, analyze_document, merge_page_text, render_page, render_task,
 )
 from cookbook.llm import LLMResult, VisionLLM
 
@@ -38,7 +38,7 @@ Output only the transcription."""
 class PageTranscript:
     page: int
     strategy: Strategy
-    source: str  # "text_layer", "vision" or "none"
+    source: str  # "text_layer", "text_file", "vision" or "none"
     text: str  # the primary reading
     calls: list[LLMResult] = field(default_factory=list)  # primary model calls for this page
     second_text: str | None = None  # the second reading of a vision page, if there was one
@@ -98,7 +98,7 @@ def transcribe_pdf(path: str | Path, llm: VisionLLM, pages: set[int] | None = No
         raise ValueError("the second reader must be a different model, or it would only repeat the first")
 
     out = []
-    for r in analyze_pdf(path):
+    for r in analyze_document(path):
         if pages and r.page not in pages:
             continue
         if r.strategy is Strategy.VISION:
@@ -112,6 +112,8 @@ def transcribe_pdf(path: str | Path, llm: VisionLLM, pages: set[int] | None = No
             out.append(t)
         elif r.strategy is Strategy.EMPTY:
             out.append(PageTranscript(r.page, r.strategy, "none", ""))
+        elif r.kind == "text":  # a plain text file: used as it is, its lines keep their own numbers
+            out.append(PageTranscript(r.page, r.strategy, "text_file", r.text.rstrip()))
         else:  # TEXT_DIGITAL or TEXT_OCR: the text layer is the text, only images are read
             t = PageTranscript(r.page, r.strategy, "text_layer", "")
             image_texts = {}
@@ -130,7 +132,18 @@ def transcribe_pdf(path: str | Path, llm: VisionLLM, pages: set[int] | None = No
     return out
 
 
-def number_lines(page: int, text: str) -> list[str]:
-    """Prefix each non-empty line with an id like `p1:L3`, for later citation."""
-    lines = [ln for ln in text.splitlines() if ln.strip()]
-    return [f"p{page}:L{i}\t{ln}" for i, ln in enumerate(lines, start=1)]
+def number_lines(page: int, text: str, count_blank: bool = False) -> list[str]:
+    """Prefix each non-empty line with an id like `p1:L3`, for later citation.
+
+    By default only non-empty lines are counted: a reading by a model has blank lines
+    where it happens to put them. With `count_blank` every line is counted, so the id is
+    the line's own number in the file (used for plain text files).
+    """
+    out, n = [], 0
+    for line in text.splitlines():
+        if line.strip():
+            n += 1
+            out.append(f"p{page}:L{n}\t{line}")
+        elif count_blank:
+            n += 1  # a blank line keeps its number but is not listed
+    return out

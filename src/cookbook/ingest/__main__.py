@@ -4,18 +4,19 @@ import argparse
 import json
 import sys
 
-from .pdf import analyze_pdf
+from .pdf import analyze_document
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Decide the reading strategy for each PDF page.")
+    ap = argparse.ArgumentParser(description="Decide the reading strategy for each page of a PDF, "
+                                             "an image or a plain text file.")
     ap.add_argument("pdf")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     ap.add_argument("--show-text", action="store_true", help="also print extracted text")
     args = ap.parse_args()
 
     try:
-        pages = analyze_pdf(args.pdf)
+        pages = analyze_document(args.pdf)
     except Exception as e:  # unreadable / encrypted / not a PDF
         print(f"error: {e}", file=sys.stderr)
         return 1

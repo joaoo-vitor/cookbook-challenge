@@ -93,6 +93,7 @@ class PageResult:
     text: str = field(repr=False, default="")
     tasks: list[ExtractionTask] = field(default_factory=list)  # extras beyond `strategy`
     blocks: list[TextBlock] = field(repr=False, default_factory=list)  # text with positions
+    kind: str = "pdf"  # what the input file was: "pdf", "image" or "text"
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -359,3 +360,64 @@ def analyze_pdf(path: str | Path) -> list[PageResult]:
             ]
             results.append(PageResult(i, strategy, reasons, signals, text, tasks, blocks))
         return results
+
+
+# --- any input: PDF, image or plain text ---------------------------------------
+_IMAGE_SIGNATURES = (b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff", b"GIF87a", b"GIF89a", b"II*\x00", b"MM\x00*")
+_UTF16_BOMS = (b"\xff\xfe", b"\xfe\xff")
+
+
+def detect_kind(path: str | Path) -> str:
+    """What came in, judged by the first bytes of the file and not by its name: "pdf", "image" or "text".
+
+    A file that is none of these (it holds binary data) is an error.
+    """
+    with open(path, "rb") as f:
+        head = f.read(2048)
+    if head.startswith(b"%PDF"):
+        return "pdf"
+    if head.startswith(_IMAGE_SIGNATURES) or (head[:4] == b"RIFF" and head[8:12] == b"WEBP"):
+        return "image"
+    if b"\x00" in head and not head.startswith(_UTF16_BOMS):
+        raise ValueError(f"{path} is not a PDF, an image or a text file")
+    return "text"
+
+
+def _read_text(path: str | Path) -> str:
+    """Decode a text file: UTF-8 (with or without a BOM), UTF-16 with a BOM, else Windows-1252."""
+    raw = Path(path).read_bytes()
+    if raw.startswith(_UTF16_BOMS):
+        return raw.decode("utf-16")
+    try:
+        return raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return raw.decode("cp1252", errors="replace")
+
+
+def analyze_text(path: str | Path) -> list[PageResult]:
+    """A plain text file is one page of text. It is used as it is: no reading, no wrapping.
+
+    The lines of the file stay the lines of the text, so a line id points at the same
+    line as in the file.
+    """
+    text = _read_text(path)
+    quality = text_quality(text)
+    signals = Signals(n_chars=len(text.strip()), image_coverage=0.0, has_big_image=False,
+                      has_invisible_text=False, ocr_producer=False, ocr_font=False, text_quality=quality)
+    if not text.strip():
+        return [PageResult(1, Strategy.EMPTY, ["the text file is empty"], signals, "", kind="text")]
+    reasons = ["plain text file: its lines are used as they are"]
+    if quality is not None and quality < MIN_QUALITY:
+        reasons.append(f"text quality {quality:.2f} is low: the file may not be plain text in this encoding")
+    return [PageResult(1, Strategy.TEXT_DIGITAL, reasons, signals, text, kind="text")]
+
+
+def analyze_document(path: str | Path) -> list[PageResult]:
+    """Decide how to read each page of a PDF, an image or a plain text file."""
+    kind = detect_kind(path)
+    if kind == "text":
+        return analyze_text(path)
+    pages = analyze_pdf(path)  # PyMuPDF opens an image as a document of one page
+    for page in pages:
+        page.kind = kind
+    return pages
