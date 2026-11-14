@@ -398,3 +398,29 @@ def make_client(provider: str, model: str | None = None, fallbacks=None) -> Gemi
     if provider == "claude":
         return ClaudeClient(model=model, fallbacks=fallbacks)
     raise ValueError(f"unknown provider {provider!r}: expected 'gemini' or 'claude'")
+
+
+def summarize_calls(results: list[LLMResult]) -> dict:
+    """Totals over model calls, for a run's cost and latency report.
+
+    Tokens and seconds are summed over every call, cached ones included: that is what the
+    same run would use with an empty cache (a cached answer keeps the numbers of the call
+    that made it). `cached_calls` says how many of the calls were free this time.
+    """
+    def empty() -> dict:
+        return {"calls": 0, "cached_calls": 0, "input_tokens": 0, "output_tokens": 0,
+                "thinking_tokens": 0, "call_seconds": 0.0}
+
+    total, by_model = empty(), {}
+    total.update({"fallbacks": 0, "extra_attempts": 0})
+    for r in results:
+        for bucket in (total, by_model.setdefault(r.model, empty())):
+            bucket["calls"] += 1
+            bucket["cached_calls"] += int(r.cached)
+            bucket["input_tokens"] += r.input_tokens or 0
+            bucket["output_tokens"] += r.output_tokens or 0
+            bucket["thinking_tokens"] += r.thinking_tokens or 0
+            bucket["call_seconds"] = round(bucket["call_seconds"] + r.seconds, 2)
+        total["fallbacks"] += int(r.fell_back_from is not None and not r.cached)
+        total["extra_attempts"] += 0 if r.cached else max(r.attempts - 1, 0)
+    return {**total, "by_model": by_model}

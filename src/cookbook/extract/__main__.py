@@ -12,6 +12,7 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 from .transcribe import number_lines, transcribe_pdf
@@ -105,6 +106,7 @@ def main() -> int:
         ap.error("pdf is required unless --list-models is given")
 
     pages = {int(p) for p in args.pages.split(",")} if args.pages else None
+    started = time.perf_counter()
     try:
         transcripts = transcribe_pdf(args.pdf, llm, pages=pages, second=second)
     except Exception as e:  # API errors, unreadable PDF: short message, no traceback
@@ -119,7 +121,7 @@ def main() -> int:
     for t in transcripts:
         base = out / f"{stem}_p{t.page}"
         base.with_name(base.name + ".txt").write_text(
-            "\n".join(number_lines(t.page, t.text)) + "\n", encoding="utf-8")
+            "\n".join(number_lines(t.page, t.text, count_blank=t.source == "text_file")) + "\n", encoding="utf-8")
         base.with_name(base.name + ".usage.json").write_text(
             json.dumps({"primary": _usage(t.calls), "second": _usage(t.second_calls)}, indent=2),
             encoding="utf-8")
@@ -148,12 +150,37 @@ def main() -> int:
         for w in t.warnings:
             print(f"  warning: {w}")
 
+    code, structure_calls, issue_counts = 0, [], None
     if args.structure:
-        return _structure(transcripts, llm, out, f"{Path(args.pdf).stem}_{_safe(llm.model)}")
-    return 0
+        code, structure_calls, issue_counts = _structure(transcripts, llm, out, stem)
+    calls = [c for t in transcripts for c in t.calls + t.second_calls] + structure_calls
+    _report_totals(calls, time.perf_counter() - started, out / f"{stem}.run.json",
+                   {"input": Path(args.pdf).name, "pages": len(transcripts),
+                    "primary": f"{llm.name}/{llm.model}",
+                    "second": f"{second.name}/{second.model}" if second else None,
+                    "unreliable_pages": [t.page for t in transcripts if t.unreliable],
+                    "issues": issue_counts})
+    return code
 
 
-def _structure(transcripts, llm, out: Path, stem: str) -> int:
+def _report_totals(calls, wall_seconds: float, path: Path, info: dict) -> None:
+    """Print what the run used and save it next to the other outputs."""
+    from cookbook.llm import summarize_calls
+
+    totals = summarize_calls(calls)
+    path.write_text(json.dumps({**info, "wall_seconds": round(wall_seconds, 2), "calls": totals},
+                               indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"\nrun totals: {totals['calls']} call(s), {totals['cached_calls']} from the cache, "
+          f"{totals['fallbacks']} fallback(s), {totals['extra_attempts']} extra attempt(s) -> {path}")
+    print(f"  tokens in/out/thinking: {totals['input_tokens']:,}/{totals['output_tokens']:,}/"
+          f"{totals['thinking_tokens']:,} (what the same run uses with an empty cache)")
+    print(f"  time: {totals['call_seconds']} s of calls added up (the two readers run at the same time), "
+          f"{wall_seconds:.1f} s wall-clock this run")
+    for model, m in totals["by_model"].items():
+        print(f"  {model}: {m['calls']} call(s), {m['input_tokens']:,} in / {m['output_tokens']:,} out")
+
+
+def _structure(transcripts, llm, out: Path, stem: str):
     from .structure import StructureError, structure_recipe
     from .transcript import build_transcript
 
@@ -163,7 +190,7 @@ def _structure(transcripts, llm, out: Path, stem: str) -> int:
         result = structure_recipe(transcript, llm)
     except StructureError as e:
         print(f"\nerror: {e}", file=sys.stderr)
-        return 1
+        return 1, [], None
     recipe = result.recipe
     (out / f"{stem}.recipe.json").write_text(
         recipe.model_dump_json(indent=2, exclude_none=False), encoding="utf-8")
@@ -183,7 +210,7 @@ def _structure(transcripts, llm, out: Path, stem: str) -> int:
     for i in result.issues:
         if i.severity != "low":
             print(f"    [{i.severity}] {i.code} ({i.refers_to}): {i.message}")
-    return 0
+    return 0, result.calls, counts
 
 
 if __name__ == "__main__":
