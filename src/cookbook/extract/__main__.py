@@ -48,6 +48,8 @@ def main() -> int:
     ap.add_argument("--fallback-models", help="comma-separated models to try when a reader's own model "
                     "keeps failing (default: GEMINI_FALLBACK_MODELS, then a built-in name)")
     ap.add_argument("--no-fallback", action="store_true", help="never switch to another model")
+    ap.add_argument("--structure", action="store_true",
+                    help="after reading, fill the recipe schema (ingredients, tools, steps, servings) and check it")
     ap.add_argument("--single", action="store_true", help="one model only, no comparison")
     ap.add_argument("--pages", help="comma-separated 1-based pages, e.g. 1,2")
     ap.add_argument("--out", default="data/experiments")
@@ -116,6 +118,42 @@ def main() -> int:
                 print(f"    [{f.severity}] {f.line} {f.kind}: {f.primary!r} vs {f.secondary!r}")
         for w in t.warnings:
             print(f"  warning: {w}")
+
+    if args.structure:
+        return _structure(transcripts, llm, out, f"{Path(args.pdf).stem}_{_safe(llm.model)}")
+    return 0
+
+
+def _structure(transcripts, llm, out: Path, stem: str) -> int:
+    from .structure import StructureError, structure_recipe
+    from .transcript import build_transcript
+
+    transcript = build_transcript(transcripts)
+    (out / f"{stem}.transcript.txt").write_text(transcript.as_prompt() + "\n", encoding="utf-8")
+    try:
+        result = structure_recipe(transcript, llm)
+    except StructureError as e:
+        print(f"\nerror: {e}", file=sys.stderr)
+        return 1
+    recipe = result.recipe
+    (out / f"{stem}.recipe.json").write_text(
+        recipe.model_dump_json(indent=2, exclude_none=False), encoding="utf-8")
+    (out / f"{stem}.issues.json").write_text(
+        json.dumps([i.model_dump() for i in result.issues], indent=2, ensure_ascii=False), encoding="utf-8")
+
+    print(f"\nstructured recipe -> {out / (stem + '.recipe.json')}")
+    for c in result.calls:
+        print(f"  structuring tokens in/out/thinking: {c.input_tokens}/{c.output_tokens}/{c.thinking_tokens}, "
+              f"{c.seconds}s{_note(c)}")
+    s = recipe.servings
+    print(f"  {len(recipe.ingredients)} ingredients, {len(recipe.tools)} tools, {len(recipe.steps)} steps; "
+          f"servings: {s.value if s.value is not None else 'unknown'} ({'stated' if s.stated else 'not stated'})")
+    counts = {sev: sum(1 for i in result.issues if i.severity == sev) for sev in ("high", "medium", "low")}
+    print(f"  issues: {counts['high']} high, {counts['medium']} medium, {counts['low']} low -> "
+          f"{out / (stem + '.issues.json')}")
+    for i in result.issues:
+        if i.severity != "low":
+            print(f"    [{i.severity}] {i.code} ({i.refers_to}): {i.message}")
     return 0
 
 

@@ -17,7 +17,10 @@ import re
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from pydantic import BaseModel
 
 CACHE_DIR = Path(".cache") / "llm"  # gitignored
 # Models that worked for our key in November 2026. Names change and get retired:
@@ -50,6 +53,12 @@ class VisionLLM(Protocol):
     name: str
 
     def transcribe(self, image: bytes, prompt: str) -> LLMResult: ...
+
+
+class TextLLM(Protocol):
+    name: str
+
+    def structure(self, text: str, prompt: str, schema: type[BaseModel]) -> LLMResult: ...
 
 
 def sniff_mime(image: bytes) -> str:
@@ -192,13 +201,25 @@ class GeminiClient:
         mistaken for the primary model's. `result.fell_back_from` says when it was a fallback.
         """
         mime = sniff_mime(image)
+        return self._run(prompt, image, lambda model: self._generate(model, image, mime, prompt))
 
+    def structure(self, text: str, prompt: str, schema: type[BaseModel]) -> LLMResult:
+        """Fill `schema` from `text`. The answer is JSON in `result.text`; the caller validates it.
+
+        Same caching, retries and fallback as `transcribe`. The schema is part of the cache key.
+        """
+        key_prompt = prompt + "\n" + json.dumps(schema.model_json_schema(), sort_keys=True)
+        return self._run(key_prompt, text.encode("utf-8"),
+                         lambda model: self._generate_structured(model, text, prompt, schema))
+
+    def _run(self, key_prompt: str, payload: bytes, call) -> LLMResult:
+        """Cache lookup, then `call(model)` with retries and fallback, cached under the model that answered."""
         def one(model: str) -> LLMResult:
-            key = cache_key(self.name, model, prompt, image)
+            key = cache_key(self.name, model, key_prompt, payload)
             hit = read_cache(self.cache_dir, key)
             if hit:
                 return hit
-            result = self._generate(model, image, mime, prompt)
+            result = call(model)
             write_cache(self.cache_dir, key, result)
             return result
 
@@ -209,6 +230,26 @@ class GeminiClient:
         result.failures = outcome.failures
         result.fell_back_from = self.model if outcome.model != self.model else None
         return result
+
+    def _generate_structured(self, model: str, text: str, prompt: str, schema: type[BaseModel]) -> LLMResult:
+        from google.genai import types
+
+        start = time.perf_counter()
+        response = self._client.models.generate_content(
+            model=model,
+            contents=[prompt, "Transcript:\n" + text],
+            config=types.GenerateContentConfig(
+                temperature=0, response_mime_type="application/json", response_schema=schema),
+        )
+        usage = getattr(response, "usage_metadata", None)
+        return LLMResult(
+            text=response.text or "",
+            model=model,
+            input_tokens=getattr(usage, "prompt_token_count", None),
+            output_tokens=getattr(usage, "candidates_token_count", None),
+            seconds=round(time.perf_counter() - start, 2),
+            thinking_tokens=getattr(usage, "thoughts_token_count", None),
+        )
 
     def _generate(self, model: str, image: bytes, mime: str, prompt: str) -> LLMResult:
         from google.genai import types
