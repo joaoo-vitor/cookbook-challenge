@@ -202,11 +202,23 @@ def _check_coverage(recipe: Recipe, tr: Transcript) -> list[Issue]:
     order = list(tr.lines)
     inside = [order.index(i) for i in cited if i in tr.lines]
     first, last = (min(inside), max(inside)) if inside else (0, len(order) - 1)
+    # The number of a numbered list ("1. Mix ...") is a label, not a quantity. It is excused only
+    # when it equals the step's own number and sits on the step's first line, so an ordinal in
+    # the middle of a step ("... nach dem 2. Tag") still counts.
+    step_label: dict[str, int] = {}
+    for s in recipe.steps:
+        known = [i for i in s.lines if i in tr.lines]
+        if known:
+            step_label.setdefault(min(known, key=order.index), s.n)
     for position, (line_id, line) in enumerate(tr.lines.items()):
         if re.fullmatch(r"\s*\d+\s*", line):  # a page number
             continue
         covered = {n for text in texts.get(line_id, []) for n in numbers_in(text)}
-        missing = [n for n in numbers_in(line) if n not in covered]
+        body = line
+        marker = re.match(r"\s*\(?(\d{1,3})[.)]\s+", line)
+        if marker and step_label.get(line_id) == int(marker.group(1)):
+            body = line[marker.end():]
+        missing = [n for n in numbers_in(body) if n not in covered]
         if missing:
             shown = ", ".join(f"{n:g}" for n in missing)
             outside = position < first or position > last

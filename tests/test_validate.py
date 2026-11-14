@@ -140,6 +140,38 @@ def test_a_number_that_is_only_in_the_quote_is_not_covered():
     assert issue.refers_to == "p1:L5" and issue.severity == "high"
 
 
+def _numbered_list():
+    t = Transcript()
+    t.lines = {"p1:L1": "1. Mix the flour and the salt.",
+               "p1:L2": "2. Heat the pan and cook for 2 minutes until golden.",
+               "p1:L3": "3. Tag danach servieren."}  # an ordinal inside the text, not a list label
+    r = Recipe(steps=[
+        Step(n=1, text="Mix the flour and the salt", quote="Mix the flour and the salt", lines=["p1:L1"]),
+        Step(n=2, text="Heat the pan and cook for 2 minutes until golden", duration_text="2 minutes",
+             quote="Heat the pan and cook for 2 minutes", lines=["p1:L2"]),
+    ])
+    return r, t
+
+
+def test_the_numbers_of_a_numbered_list_are_labels_not_dropped_quantities():
+    r, t = _numbered_list()
+    del t.lines["p1:L3"]
+    assert not _find(validate(r, t), "uncovered_number")
+
+
+def test_a_list_label_that_is_not_the_steps_number_is_still_checked():
+    r, t = _numbered_list()
+    del t.lines["p1:L3"]
+    r.steps[0].n = 5  # the step is not number 1, so "1." on its line is a real number nothing covers
+    assert [i.refers_to for i in _find(validate(r, t), "uncovered_number")] == ["p1:L1"]
+
+
+def test_an_ordinal_that_starts_a_line_in_the_middle_of_a_step_is_still_checked():
+    r, t = _numbered_list()
+    r.steps[1].lines = ["p1:L2", "p1:L3"]  # the second line "3. Tag ..." continues step 2, it is not its start
+    assert [i.refers_to for i in _find(validate(r, t), "uncovered_number")] == ["p1:L3"]
+
+
 def test_a_number_before_the_first_extracted_line_is_only_a_medium_issue():
     t = _transcript()
     t.lines = {"p0:L1": "Anno 1887", **t.lines}  # a header the recipe does not use
