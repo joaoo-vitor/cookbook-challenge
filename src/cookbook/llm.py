@@ -12,8 +12,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import random
+import re
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Protocol
 
@@ -22,6 +24,12 @@ CACHE_DIR = Path(".cache") / "llm"  # gitignored
 # override with GEMINI_MODEL / GEMINI_SECOND_MODEL and check `--list-models`.
 DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite"
 DEFAULT_SECOND_MODEL = "gemini-3.5-flash-lite"
+DEFAULT_FALLBACK_MODELS = ("gemini-3.5-flash",)  # tried, in order, when a reader's own model keeps failing
+
+ATTEMPTS_PER_MODEL = 3  # calls to one model before giving up on it
+BASE_DELAY = 1.0  # seconds before the first retry; doubles each time
+MAX_DELAY = 20.0
+REQUEST_TIMEOUT = 90.0  # seconds. A call normally takes 3 to 15 s; we saw hangs of 5 minutes
 
 
 @dataclass
@@ -33,6 +41,9 @@ class LLMResult:
     seconds: float
     cached: bool = False
     thinking_tokens: int | None = None  # billed as output by some providers
+    attempts: int = 1  # calls made to get this answer, across retries and fallback models
+    fell_back_from: str | None = None  # the model we asked first, when another one answered
+    failures: list[str] = field(default_factory=list)  # errors from the calls that failed first
 
 
 class VisionLLM(Protocol):
@@ -75,6 +86,68 @@ def write_cache(cache_dir: Path, key: str, result: LLMResult) -> None:
         json.dumps(asdict(result), ensure_ascii=False), encoding="utf-8")
 
 
+# --- retry and fallback ------------------------------------------------------
+RETRYABLE_CODES = {408, 429, 500, 502, 503, 504}  # timeouts, rate limits, server trouble
+_NETWORK_ERROR = re.compile(r"Timeout|Connect|Read|Remote|Network|Protocol", re.I)
+
+
+class AllModelsFailed(RuntimeError):
+    """Every model (and every retry) failed. The message lists what each one said."""
+
+
+def classify_error(exc: Exception) -> str:
+    """What to do about an error from a model call.
+
+    "retry": a temporary problem, wait and try the same model again.
+    "next_model": this model will not work (retired, or not available to this key); skip its retries.
+    "fatal": our mistake or a bad key (400, 401, 403, ...); retrying or switching cannot help.
+    """
+    code = getattr(exc, "code", None) or getattr(exc, "status_code", None)
+    if isinstance(code, int):
+        if code in RETRYABLE_CODES:
+            return "retry"
+        return "next_model" if code == 404 else "fatal"
+    return "retry" if _NETWORK_ERROR.search(type(exc).__name__) else "fatal"
+
+
+@dataclass
+class Outcome:
+    result: LLMResult
+    model: str  # the model that answered
+    calls: int  # calls made altogether
+    failures: list[str] = field(default_factory=list)  # one line per failed call
+
+
+def call_with_fallback(models: list[str], fn, attempts: int = ATTEMPTS_PER_MODEL,
+                       base_delay: float = BASE_DELAY, max_delay: float = MAX_DELAY,
+                       sleep=time.sleep, jitter=random.random) -> Outcome:
+    """Call `fn(model)` for each model in turn, retrying temporary errors with backoff.
+
+    Waits base_delay, 2x, 4x ... (at most max_delay, plus up to 25% jitter) between
+    retries of one model. After `attempts` failed calls, or at once for a model that
+    cannot work, it moves on to the next model. A fatal error is raised unchanged.
+    """
+    failures: list[str] = []
+    calls = 0
+    last: Exception | None = None
+    for model in models:
+        for attempt in range(attempts):
+            calls += 1
+            try:
+                return Outcome(fn(model), model, calls, failures)
+            except Exception as exc:  # noqa: BLE001 - classified below
+                kind = classify_error(exc)
+                if kind == "fatal":
+                    raise
+                last = exc
+                failures.append(f"{model}: {type(exc).__name__}: {str(exc)[:120]}")
+                if kind == "next_model":
+                    break
+                if attempt < attempts - 1:
+                    sleep(min(base_delay * 2 ** attempt, max_delay) * (1 + 0.25 * jitter()))
+    raise AllModelsFailed(f"all models failed after {calls} call(s): " + " | ".join(failures)) from last
+
+
 # --- Gemini ------------------------------------------------------------------
 def load_env() -> None:
     """Load a local .env file if python-dotenv is available (never committed)."""
@@ -89,7 +162,8 @@ class GeminiClient:
     name = "gemini"
 
     def __init__(self, model: str | None = None, api_key: str | None = None,
-                 cache_dir: Path = CACHE_DIR):
+                 cache_dir: Path = CACHE_DIR, fallbacks: tuple[str, ...] | list[str] | None = None,
+                 attempts: int = ATTEMPTS_PER_MODEL, timeout: float = REQUEST_TIMEOUT):
         load_env()
         key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
         if not key:
@@ -97,37 +171,60 @@ class GeminiClient:
                 "No Gemini API key found. Put GEMINI_API_KEY=... in a .env file "
                 "(see .env.example) or set it in your shell.")
         from google import genai  # imported late so offline tests do not need the SDK
+        from google.genai import types
 
-        self._client = genai.Client(api_key=key)
+        # The SDK does not retry unless asked to; we retry ourselves (call_with_fallback),
+        # and we set a timeout so one call cannot hang for minutes. The SDK takes milliseconds.
+        self._client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=int(timeout * 1000)))
         self.model = model or os.environ.get("GEMINI_MODEL") or DEFAULT_GEMINI_MODEL
+        self.fallbacks = [m for m in (fallbacks or []) if m != self.model]
+        self.attempts = attempts
         self.cache_dir = cache_dir
+        self._sleep = time.sleep
 
     def list_models(self) -> list[str]:
         return [m.name for m in self._client.models.list()]
 
     def transcribe(self, image: bytes, prompt: str) -> LLMResult:
-        mime = sniff_mime(image)
-        key = cache_key(self.name, self.model, prompt, image)
-        hit = read_cache(self.cache_dir, key)
-        if hit:
-            return hit
+        """Read an image. Retries temporary errors, then falls back to other models.
 
+        The answer is cached under the model that gave it, so a fallback answer is never
+        mistaken for the primary model's. `result.fell_back_from` says when it was a fallback.
+        """
+        mime = sniff_mime(image)
+
+        def one(model: str) -> LLMResult:
+            key = cache_key(self.name, model, prompt, image)
+            hit = read_cache(self.cache_dir, key)
+            if hit:
+                return hit
+            result = self._generate(model, image, mime, prompt)
+            write_cache(self.cache_dir, key, result)
+            return result
+
+        outcome = call_with_fallback([self.model, *self.fallbacks], one,
+                                     attempts=self.attempts, sleep=self._sleep)
+        result = outcome.result
+        result.attempts = outcome.calls
+        result.failures = outcome.failures
+        result.fell_back_from = self.model if outcome.model != self.model else None
+        return result
+
+    def _generate(self, model: str, image: bytes, mime: str, prompt: str) -> LLMResult:
         from google.genai import types
 
         start = time.perf_counter()
         response = self._client.models.generate_content(
-            model=self.model,
+            model=model,
             contents=[types.Part.from_bytes(data=image, mime_type=mime), prompt],
             config=types.GenerateContentConfig(temperature=0),
         )
         usage = getattr(response, "usage_metadata", None)
-        result = LLMResult(
+        return LLMResult(
             text=response.text or "",
-            model=self.model,
+            model=model,
             input_tokens=getattr(usage, "prompt_token_count", None),
             output_tokens=getattr(usage, "candidates_token_count", None),
             seconds=round(time.perf_counter() - start, 2),
             thinking_tokens=getattr(usage, "thoughts_token_count", None),
         )
-        write_cache(self.cache_dir, key, result)
-        return result

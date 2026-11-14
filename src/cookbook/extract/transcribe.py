@@ -53,18 +53,33 @@ class PageTranscript:
 def _read(image: bytes, llm: VisionLLM, second: VisionLLM | None):
     """Read one image with the primary model and, if given, the second one, in parallel.
 
-    Returns (primary result, second result or None, warning or None). A failure of
-    the primary model raises. A failure of the second only costs the comparison.
+    Returns (primary result, second result or None, warnings). A failure of the
+    primary model raises. A failure of the second only costs the comparison. If a
+    reader had to fall back to another model that is said in the warnings, and if
+    both ended up on the same model the comparison is dropped, because two readings
+    from one model are not independent.
     """
     if second is None:
-        return llm.transcribe(image, PROMPT), None, None
+        primary = llm.transcribe(image, PROMPT)
+        return primary, None, _fallback_notes(primary, None)
     with ThreadPoolExecutor(max_workers=2) as pool:
         first, other = pool.submit(llm.transcribe, image, PROMPT), pool.submit(second.transcribe, image, PROMPT)
         primary = first.result()
         try:
-            return primary, other.result(), None
+            secondary = other.result()
         except Exception as e:  # noqa: BLE001 - any provider error: keep the primary reading
-            return primary, None, f"second read failed ({type(e).__name__}): {str(e)[:200]}"
+            warnings = _fallback_notes(primary, None)
+            return primary, None, warnings + [f"second read failed ({type(e).__name__}): {str(e)[:200]}"]
+    warnings = _fallback_notes(primary, secondary)
+    if primary.model == secondary.model:
+        warnings.append(f"both readings came from {primary.model}, so they are not independent: comparison skipped")
+        return primary, None, warnings
+    return primary, secondary, warnings
+
+
+def _fallback_notes(primary: LLMResult, secondary: LLMResult | None) -> list[str]:
+    return [f"{who} reader fell back from {res.fell_back_from} to {res.model}"
+            for who, res in (("primary", primary), ("second", secondary)) if res and res.fell_back_from]
 
 
 def transcribe_pdf(path: str | Path, llm: VisionLLM, pages: set[int] | None = None,
@@ -83,14 +98,13 @@ def transcribe_pdf(path: str | Path, llm: VisionLLM, pages: set[int] | None = No
         if pages and r.page not in pages:
             continue
         if r.strategy is Strategy.VISION:
-            first, other, warning = _read(render_page(path, r.page), llm, second)
+            first, other, warnings = _read(render_page(path, r.page), llm, second)
             t = PageTranscript(r.page, r.strategy, "vision", first.text.strip(), [first])
             if other:
                 t.second_text, t.second_calls = other.text.strip(), [other]
                 t.comparisons.append(compare_reads(r.page, first.text, other.text, "page",
                                                    min_agreement=min_agreement))
-            if warning:
-                t.warnings.append(warning)
+            t.warnings.extend(warnings)
             out.append(t)
         elif r.strategy is Strategy.EMPTY:
             out.append(PageTranscript(r.page, r.strategy, "none", ""))
@@ -98,7 +112,7 @@ def transcribe_pdf(path: str | Path, llm: VisionLLM, pages: set[int] | None = No
             t = PageTranscript(r.page, r.strategy, "text_layer", "")
             image_texts = {}
             for i, task in enumerate(r.tasks):
-                first, other, warning = _read(render_task(path, r.page, task), llm, second)
+                first, other, warnings = _read(render_task(path, r.page, task), llm, second)
                 t.calls.append(first)
                 image_texts[i] = first.text
                 if other:
@@ -106,8 +120,7 @@ def transcribe_pdf(path: str | Path, llm: VisionLLM, pages: set[int] | None = No
                     t.comparisons.append(compare_reads(r.page, first.text, other.text, f"image {i}",
                                                        id_prefix=f"p{r.page}:image{i}",
                                                        min_agreement=min_agreement))
-                if warning:
-                    t.warnings.append(f"image {i}: {warning}")
+                t.warnings.extend(f"image {i}: {w}" for w in warnings)
             t.text = merge_page_text(r, image_texts).strip()
             out.append(t)
     return out

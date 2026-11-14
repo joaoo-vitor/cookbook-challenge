@@ -18,17 +18,20 @@ class FakeLLM:
 
     name = "fake"
 
-    def __init__(self, answer="Hierzu eignen sich die festen Bratenstücke.", model="fake-model", fail=None):
+    def __init__(self, answer="Hierzu eignen sich die festen Bratenstücke.", model="fake-model", fail=None,
+                 served_by=None):
         self.answer = answer
         self.model = model
         self.fail = fail  # an exception to raise instead of answering
+        self.served_by = served_by  # pretend a fallback model answered instead of `model`
         self.calls = []
 
     def transcribe(self, image, prompt):
         self.calls.append((image, prompt))
         if self.fail:
             raise self.fail
-        return LLMResult(self.answer, self.model, 10, 5, 0.0)
+        return LLMResult(self.answer, self.served_by or self.model, 10, 5, 0.0,
+                         fell_back_from=self.model if self.served_by else None)
 
 
 def _png(text=GOOD) -> bytes:
@@ -133,6 +136,23 @@ def test_a_failing_primary_reader_is_an_error(tmp_path):
     first = FakeLLM(model="model-a", fail=RuntimeError("boom"))
     with pytest.raises(RuntimeError):
         transcribe_pdf(_scan(tmp_path), first, second=FakeLLM(model="model-b"))
+
+
+def test_a_fallback_is_reported_and_the_comparison_still_happens(tmp_path):
+    first = FakeLLM("Salz und Pfeffer dazugeben", model="model-a", served_by="model-fb")
+    other = FakeLLM("Salz und Pfeffer dazugeben", model="model-b")
+    [t] = transcribe_pdf(_scan(tmp_path), first, second=other)
+    assert t.warnings == ["primary reader fell back from model-a to model-fb"]
+    assert len(t.comparisons) == 1
+
+
+def test_two_readings_from_the_same_model_are_not_compared(tmp_path):
+    first = FakeLLM("Salz und Pfeffer", model="model-a", served_by="model-fb")
+    other = FakeLLM("Salz und Pfeffer", model="model-b", served_by="model-fb")  # both fell back to one model
+    [t] = transcribe_pdf(_scan(tmp_path), first, second=other)
+    assert t.comparisons == [] and t.second_text is None
+    assert any("not independent" in w for w in t.warnings)
+    assert any("primary reader fell back" in w for w in t.warnings)
 
 
 def test_the_second_reader_must_be_a_different_model(tmp_path):

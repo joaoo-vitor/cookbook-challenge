@@ -23,8 +23,20 @@ def _safe(name: str) -> str:
 
 def _usage(calls) -> list[dict]:
     return [{"model": c.model, "input_tokens": c.input_tokens, "output_tokens": c.output_tokens,
-             "thinking_tokens": c.thinking_tokens, "seconds": c.seconds, "cached": c.cached}
+             "thinking_tokens": c.thinking_tokens, "seconds": c.seconds, "cached": c.cached,
+             "attempts": c.attempts, "fell_back_from": c.fell_back_from, "failures": c.failures}
             for c in calls]
+
+
+def _note(c) -> str:
+    notes = []
+    if c.cached:
+        notes.append("cached")
+    if c.attempts > 1:
+        notes.append(f"{c.attempts} calls")
+    if c.fell_back_from:
+        notes.append(f"FALLBACK from {c.fell_back_from}")
+    return f" ({', '.join(notes)})" if notes else ""
 
 
 def main() -> int:
@@ -33,18 +45,26 @@ def main() -> int:
     ap.add_argument("--provider", default="gemini", choices=["gemini"])
     ap.add_argument("--model", help="primary model (default: GEMINI_MODEL, then a built-in name)")
     ap.add_argument("--second-model", help="second reader (default: GEMINI_SECOND_MODEL, then a built-in name)")
+    ap.add_argument("--fallback-models", help="comma-separated models to try when a reader's own model "
+                    "keeps failing (default: GEMINI_FALLBACK_MODELS, then a built-in name)")
+    ap.add_argument("--no-fallback", action="store_true", help="never switch to another model")
     ap.add_argument("--single", action="store_true", help="one model only, no comparison")
     ap.add_argument("--pages", help="comma-separated 1-based pages, e.g. 1,2")
     ap.add_argument("--out", default="data/experiments")
     ap.add_argument("--list-models", action="store_true", help="list models the key can use")
     args = ap.parse_args()
 
-    from cookbook.llm import DEFAULT_SECOND_MODEL, GeminiClient
+    from cookbook.llm import DEFAULT_FALLBACK_MODELS, DEFAULT_SECOND_MODEL, GeminiClient
+
+    raw = args.fallback_models or os.environ.get("GEMINI_FALLBACK_MODELS")
+    fallbacks = [] if args.no_fallback else (
+        [m.strip() for m in raw.split(",") if m.strip()] if raw else list(DEFAULT_FALLBACK_MODELS))
 
     try:
-        llm = GeminiClient(model=args.model)
+        llm = GeminiClient(model=args.model, fallbacks=fallbacks)
         second = None if args.single else GeminiClient(
-            model=args.second_model or os.environ.get("GEMINI_SECOND_MODEL") or DEFAULT_SECOND_MODEL)
+            model=args.second_model or os.environ.get("GEMINI_SECOND_MODEL") or DEFAULT_SECOND_MODEL,
+            fallbacks=fallbacks)
     except RuntimeError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
@@ -65,7 +85,8 @@ def main() -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     stem = f"{Path(args.pdf).stem}_{_safe(llm.model)}"
-    print(f"primary: {llm.model}" + (f" | second reader: {second.model}" if second else " | single read"))
+    print(f"primary: {llm.model}" + (f" | second reader: {second.model}" if second else " | single read")
+          + (f" | fallback: {', '.join(llm.fallbacks)}" if llm.fallbacks else " | no fallback"))
     for t in transcripts:
         base = out / f"{stem}_p{t.page}"
         base.with_name(base.name + ".txt").write_text(
@@ -82,9 +103,12 @@ def main() -> int:
                             "warnings": t.warnings}, indent=2, ensure_ascii=False), encoding="utf-8")
 
         print(f"\npage {t.page} [{t.strategy.value}, {t.source}] -> {base.with_name(base.name + '.txt')}")
-        for c in t.calls:
-            print(f"  primary tokens in/out/thinking: {c.input_tokens}/{c.output_tokens}/{c.thinking_tokens}, "
-                  f"{c.seconds}s{' (cached)' if c.cached else ''}")
+        for who, calls in (("primary", t.calls), ("second ", t.second_calls)):
+            for c in calls:
+                print(f"  {who} tokens in/out/thinking: {c.input_tokens}/{c.output_tokens}/{c.thinking_tokens}, "
+                      f"{c.seconds}s{_note(c)}")
+                for failure in c.failures:
+                    print(f"    failed call: {failure}")
         for cmp in t.comparisons:
             verdict = "UNRELIABLE: the two reads mostly disagree" if cmp.unreliable else "reads agree"
             print(f"  {cmp.label}: agreement {cmp.agreement:.2f} ({verdict}), {len(cmp.flags)} flag(s)")
