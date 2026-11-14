@@ -104,6 +104,25 @@ class AllModelsFailed(RuntimeError):
     """Every model (and every retry) failed. The message lists what each one said."""
 
 
+class EmptyResponse(RuntimeError):
+    """The model answered with no text (blocked, cut off, or just empty).
+
+    Treated as a temporary failure: retried, then another model is tried. It is never
+    cached and never reaches the checks as if it were a reading.
+    """
+
+
+def _text_or_raise(response, model: str) -> str:
+    text = response.text or ""
+    if text.strip():
+        return text
+    try:
+        reason = response.candidates[0].finish_reason
+    except Exception:  # noqa: BLE001 - the reason is only for the message
+        reason = None
+    raise EmptyResponse(f"{model} returned no text" + (f" (finish reason: {reason})" if reason else ""))
+
+
 def classify_error(exc: Exception) -> str:
     """What to do about an error from a model call.
 
@@ -111,6 +130,8 @@ def classify_error(exc: Exception) -> str:
     "next_model": this model will not work (retired, or not available to this key); skip its retries.
     "fatal": our mistake or a bad key (400, 401, 403, ...); retrying or switching cannot help.
     """
+    if isinstance(exc, EmptyResponse):
+        return "retry"
     code = getattr(exc, "code", None) or getattr(exc, "status_code", None)
     if isinstance(code, int):
         if code in RETRYABLE_CODES:
@@ -217,7 +238,7 @@ class GeminiClient:
         def one(model: str) -> LLMResult:
             key = cache_key(self.name, model, key_prompt, payload)
             hit = read_cache(self.cache_dir, key)
-            if hit:
+            if hit and hit.text.strip():  # an empty answer saved by an older version is not a hit
                 return hit
             result = call(model)
             write_cache(self.cache_dir, key, result)
@@ -243,7 +264,7 @@ class GeminiClient:
         )
         usage = getattr(response, "usage_metadata", None)
         return LLMResult(
-            text=response.text or "",
+            text=_text_or_raise(response, model),
             model=model,
             input_tokens=getattr(usage, "prompt_token_count", None),
             output_tokens=getattr(usage, "candidates_token_count", None),
@@ -262,7 +283,7 @@ class GeminiClient:
         )
         usage = getattr(response, "usage_metadata", None)
         return LLMResult(
-            text=response.text or "",
+            text=_text_or_raise(response, model),
             model=model,
             input_tokens=getattr(usage, "prompt_token_count", None),
             output_tokens=getattr(usage, "candidates_token_count", None),

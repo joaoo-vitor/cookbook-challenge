@@ -72,6 +72,9 @@ def _read(image: bytes, llm: VisionLLM, second: VisionLLM | None):
             warnings = _fallback_notes(primary, None)
             return primary, None, warnings + [f"second read failed ({type(e).__name__}): {str(e)[:200]}"]
     warnings = _fallback_notes(primary, secondary)
+    if not secondary.text.strip():  # a blank second reading is a failure, not total disagreement
+        warnings.append("the second reading was empty: comparison skipped")
+        return primary, None, warnings
     if primary.model == secondary.model:
         warnings.append(f"both readings came from {primary.model}, so they are not independent: comparison skipped")
         return primary, None, warnings

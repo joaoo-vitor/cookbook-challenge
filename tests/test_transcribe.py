@@ -160,6 +160,15 @@ def test_two_readings_from_the_same_model_are_not_compared(tmp_path):
     assert any("primary reader fell back" in w for w in t.warnings)
 
 
+def test_a_blank_second_reading_is_a_failure_not_total_disagreement(tmp_path):
+    first = FakeLLM("Salz und Pfeffer dazugeben", model="model-a")
+    other = FakeLLM("  \n", model="model-b")
+    [t] = transcribe_pdf(_scan(tmp_path), first, second=other)
+    assert t.comparisons == [] and not t.unreliable and t.second_text is None
+    assert t.text == "Salz und Pfeffer dazugeben"
+    assert any("second reading was empty" in w for w in t.warnings)
+
+
 def test_the_second_reader_must_be_a_different_model(tmp_path):
     with pytest.raises(ValueError):
         transcribe_pdf(_scan(tmp_path), FakeLLM(model="same"), second=FakeLLM(model="same"))

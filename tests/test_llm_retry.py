@@ -3,8 +3,9 @@
 import pytest
 
 from cookbook.llm import (
-    AllModelsFailed, GeminiClient, LLMResult, call_with_fallback, classify_error, read_cache,
+    AllModelsFailed, EmptyResponse, GeminiClient, LLMResult, call_with_fallback, classify_error, read_cache,
 )
+from cookbook.models import Recipe
 
 
 class ApiError(Exception):
@@ -48,6 +49,49 @@ def _run(script, models, sleeps, **kw):
 ])
 def test_classify_error(exc, kind):
     assert classify_error(exc) == kind
+
+
+def test_an_empty_answer_is_a_temporary_failure():
+    assert classify_error(EmptyResponse("model returned no text")) == "retry"
+
+
+def _model_answering(text):
+    """A stand-in for the SDK client whose model always answers `text`."""
+    from types import SimpleNamespace as NS
+    response = NS(text=text, usage_metadata=None, candidates=[NS(finish_reason="SAFETY")])
+    return NS(models=NS(generate_content=lambda **kwargs: response))
+
+
+@pytest.mark.parametrize("text", ["", None, "   \n"])
+def test_a_model_that_returns_no_text_is_an_error_not_a_reading(tmp_path, text):
+    c = _client(tmp_path, None)
+    c._client = _model_answering(text)
+    with pytest.raises(EmptyResponse, match="SAFETY"):
+        GeminiClient._generate(c, "m", JPEG, "image/jpeg", "p")
+    with pytest.raises(EmptyResponse):
+        GeminiClient._generate_structured(c, "m", "text", "p", Recipe)
+
+
+def test_an_empty_answer_is_retried_then_falls_back_and_is_never_cached(tmp_path):
+    calls = []
+
+    def generate(model, image, mime, prompt):
+        calls.append(model)
+        if model == "main":
+            raise EmptyResponse("main returned no text")
+        return _result(model)
+
+    res = _client(tmp_path, generate).transcribe(JPEG, "p")
+    assert (res.model, res.attempts, calls) == ("fb", 3, ["main", "main", "fb"])
+    assert len(list(tmp_path.glob("*.json"))) == 1  # only the real answer was cached
+
+
+def test_an_empty_answer_saved_by_an_older_version_is_not_used(tmp_path):
+    from cookbook.llm import cache_key, write_cache
+
+    write_cache(tmp_path, cache_key("gemini", "main", "p", JPEG), LLMResult("", "main", 1, None, 0.1))
+    res = _client(tmp_path, lambda model, image, mime, prompt: _result(model)).transcribe(JPEG, "p")
+    assert res.text == "text" and not res.cached
 
 
 def test_status_code_attribute_is_understood_too():
