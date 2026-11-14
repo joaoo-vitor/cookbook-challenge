@@ -57,7 +57,7 @@ def validate(recipe: Recipe, transcript: Transcript) -> list[Issue]:
         issues += _check_support(ref, quote, lines, transcript)
         issues += _check_uncertainty(ref, lines, transcript)
     for ing in recipe.ingredients:
-        issues += _check_amount(ing)
+        issues += _check_amount(ing, recipe.language)
     issues += _check_references(recipe)
     issues += _check_duplicates(recipe)
     issues += _check_servings(recipe)
@@ -110,7 +110,7 @@ def _check_uncertainty(ref: str, lines: list[str], tr: Transcript) -> list[Issue
                   lines=sorted({i for i, _ in notes}), message=f"read with doubt ({reasons})")]
 
 
-def _check_amount(ing) -> list[Issue]:
+def _check_amount(ing, language: str | None = None) -> list[Issue]:
     out = []
     ref = ing.id
     if ing.quantity is None:
@@ -125,7 +125,7 @@ def _check_amount(ing) -> list[Issue]:
             out.append(Issue(code="invented_quantity", severity="high", refers_to=ref, lines=ing.lines,
                              message=f"quantity {ing.quantity:g} has no words in the source that give it"))
         else:
-            parsed = parse_quantity(ing.quantity_text)
+            parsed = parse_quantity(ing.quantity_text, language)
             if parsed.value is None and parsed.vague is None and not numbers_in(ing.quantity_text):
                 # No digits, and words the parser does not know (the recipe may be in another
                 # language): the amount cannot be checked, which is not the same as being wrong.
@@ -142,7 +142,7 @@ def _check_amount(ing) -> list[Issue]:
             out.append(Issue(code="unknown_unit", severity="medium", refers_to=ref, lines=ing.lines,
                              message=f"unit {ing.unit!r} is not known, so it cannot be converted"))
         elif ing.quantity_text:
-            in_text = parse_quantity(ing.quantity_text).unit
+            in_text = parse_quantity(ing.quantity_text, language).unit
             if in_text and in_text != canonical:
                 out.append(Issue(code="unit_mismatch", severity="high", refers_to=ref, lines=ing.lines,
                                  message=f"unit {ing.unit!r} does not match the amount text {ing.quantity_text!r}"))

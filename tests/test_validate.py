@@ -226,13 +226,39 @@ def test_an_unknown_unit_is_flagged_as_not_convertible():
 
 
 def test_a_number_written_in_words_the_parser_does_not_know_is_not_called_wrong():
-    # Portuguese "duas xícaras": no digits, and neither word is in the tables
-    r = _with_ingredient(_recipe(), "i1", quantity=2, quantity_text="duas", unit="xícaras", quote="500 g Rindfleisch")
+    # Spanish "dos tazas" in a recipe marked Spanish: no digits, and no table for the language
+    r = _with_ingredient(_recipe(), "i1", quantity=2, quantity_text="dos", unit="tazas", quote="500 g Rindfleisch")
+    r.language = "es"
     issues = validate(r, _transcript())
     [note] = _find(issues, "amount_not_verified", "i1")
-    assert note.severity == "low" and "duas" in note.message
+    assert note.severity == "low" and "dos" in note.message
     assert not _find(issues, "quantity_mismatch", "i1")
     assert _find(issues, "unknown_unit", "i1")  # the unit is still reported
+
+
+def test_portuguese_amounts_are_verified_when_the_recipe_is_marked_portuguese():
+    base = _with_ingredient(_recipe(), "i1", quantity=2, quantity_text="duas", unit="xícaras", quote="500 g Rindfleisch")
+    base.language = "pt-BR"
+    ok = validate(base, _transcript())
+    assert not _find(ok, "amount_not_verified", "i1") and not _find(ok, "quantity_mismatch", "i1")
+    assert not _find(ok, "unknown_unit", "i1")
+    wrong = _with_ingredient(base, "i1", quantity=3)  # "duas" is 2
+    assert _find(validate(wrong, _transcript()), "quantity_mismatch", "i1")[0].severity == "high"
+
+
+def test_portuguese_half_and_spoon_units_are_verified():
+    for text, quantity, unit in (("uma xícara e meia", 1.5, "xícara"), ("meia xícara", 0.5, "xícara"),
+                                 ("2 colheres de sopa", 2, "colheres de sopa"), ("1 e 1/2", 1.5, "xícara")):
+        r = _with_ingredient(_recipe(), "i1", quantity=quantity, quantity_text=text, unit=unit, quote="500 g Rindfleisch")
+        r.language = "pt"
+        codes = _codes(i for i in validate(r, _transcript()) if i.refers_to == "i1")
+        assert "quantity_mismatch" not in codes and "unit_mismatch" not in codes and "unknown_unit" not in codes, text
+
+
+def test_the_same_portuguese_words_are_not_verified_in_a_recipe_marked_german():
+    r = _with_ingredient(_recipe(), "i1", quantity=2, quantity_text="duas", unit="xícaras", quote="500 g Rindfleisch")
+    r.language = "de"  # the German table has no "duas"
+    assert _find(validate(r, _transcript()), "amount_not_verified", "i1")
 
 
 def test_digits_are_checked_in_any_language():
