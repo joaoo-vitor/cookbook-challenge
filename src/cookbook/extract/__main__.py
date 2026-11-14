@@ -114,6 +114,8 @@ def main() -> int:
         for cmp in t.comparisons:
             verdict = "UNRELIABLE: the two reads mostly disagree" if cmp.unreliable else "reads agree"
             print(f"  {cmp.label}: agreement {cmp.agreement:.2f} ({verdict}), {len(cmp.flags)} flag(s)")
+            if cmp.reordered:
+                print(f"    reading order differs: {cmp.reordered} block(s) of words in another place (columns?)")
             for f in cmp.flags:
                 print(f"    [{f.severity}] {f.line} {f.kind}: {f.primary!r} vs {f.secondary!r}")
         for w in t.warnings:

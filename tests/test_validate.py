@@ -355,6 +355,24 @@ def test_an_unreliable_page_makes_every_line_uncertain():
         assert any(n.severity == "high" and "unreliable" in n.reason for n in t.uncertain[line_id])
 
 
+def test_a_reordered_page_is_recorded_in_the_transcript():
+    row = "2 cups flour 1 tablespoon sugar\n1 cup milk 1/2 teaspoon salt\n3 large eggs 1 pinch nutmeg"
+    col = "2 cups flour\n1 cup milk\n3 large eggs\n1 tablespoon sugar\n1/2 teaspoon salt\n1 pinch nutmeg"
+    t = build_transcript([_page(1, row, [compare_reads(1, row, col)])])
+    assert t.reordered_pages[1] >= 1 and t.uncertain == {} and t.unreliable_pages == []
+
+
+def test_a_reordered_page_gets_one_medium_issue_and_nothing_else():
+    t = _transcript()
+    t.reordered_pages = {1: 3}
+    [issue] = _find(validate(_recipe(), t), "reading_order_differs")
+    assert (issue.severity, issue.refers_to) == ("medium", "page 1") and "3 block" in issue.message
+
+
+def test_no_reordering_no_issue():
+    assert not _find(validate(_recipe(), _transcript()), "reading_order_differs")
+
+
 def test_a_page_without_a_second_reading_has_no_uncertainty():
     t = build_transcript([_page(1, "eins zwei drei")])
     assert t.uncertain == {} and t.unreliable_pages == []

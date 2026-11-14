@@ -25,6 +25,7 @@ class Transcript:
     lines: dict[str, str] = field(default_factory=dict)  # "p1:L3" -> text, in reading order
     uncertain: dict[str, list[Note]] = field(default_factory=dict)  # line id -> why we are unsure
     unreliable_pages: list[int] = field(default_factory=list)
+    reordered_pages: dict[int, int] = field(default_factory=dict)  # page -> blocks the two readings put in another order
 
     def as_prompt(self) -> str:
         """The lines with their ids, for the model that structures the recipe."""
@@ -55,6 +56,8 @@ def build_transcript(pages: list[PageTranscript]) -> Transcript:
                     out.uncertain.setdefault(line_id, []).append(note)
             if cmp.label != "page":
                 continue  # differences inside an image have no line ids on the page: only the page check applies
+            if cmp.reordered:
+                out.reordered_pages[page.page] = cmp.reordered
             for flag in cmp.flags:
                 out.uncertain.setdefault(flag.line, []).append(Note(
                     flag.severity, f"{flag.kind}: one reading has {flag.primary!r}, the other {flag.secondary!r}"))

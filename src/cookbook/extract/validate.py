@@ -62,6 +62,7 @@ def validate(recipe: Recipe, transcript: Transcript) -> list[Issue]:
     issues += _check_duplicates(recipe)
     issues += _check_servings(recipe)
     issues += _check_coverage(recipe, transcript)
+    issues += _check_reading_order(transcript)
     return sort_issues(issues)
 
 
@@ -88,6 +89,14 @@ def _check_support(ref: str, quote: str, lines: list[str], tr: Transcript) -> li
                             message="the quote is in the transcript, but not on the lines cited")]
     return out + [Issue(code="unsupported_quote", severity="high", refers_to=ref, lines=lines,
                         message=f"the quote {quote!r} is not in the transcript: possibly invented")]
+
+
+def _check_reading_order(tr: Transcript) -> list[Issue]:
+    """One note per page whose two readings put blocks of words in a different order."""
+    return [Issue(code="reading_order_differs", severity="medium", refers_to=f"page {page}",
+                  message=f"the two readings put {n} block(s) of words in a different order (columns?). The "
+                          "transcript follows the first reading, so a line may mix text from different columns")
+            for page, n in tr.reordered_pages.items()]
 
 
 def _check_uncertainty(ref: str, lines: list[str], tr: Transcript) -> list[Issue]:
