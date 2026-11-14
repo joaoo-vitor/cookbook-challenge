@@ -25,6 +25,7 @@ PROMPT = """You are transcribing a photographed page from an old handwritten Ger
 
 Rules:
 - Copy the text exactly as written, one output line per written line.
+- If the text is in columns, write one column completely, from top to bottom, before the next column. Never put text from two columns on the same output line, and keep the lines of an item that wraps inside its column together and in order. Text that runs across the full width below or above the columns goes before or after them, in reading order.
 - Keep the old spelling, punctuation and line-end hyphens. Do not correct, modernise or translate anything.
 - Copy numbers and fractions exactly as shown (for example 1/2, 4). Never guess a number: if you cannot read it, write [?].
 - If a word is hard to read, write your best reading inside [? ?], for example [?Pfeffer?]. If you cannot read it at all, write [?].

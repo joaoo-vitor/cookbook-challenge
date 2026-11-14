@@ -92,6 +92,11 @@ def test_number_lines_skips_blank_lines():
     assert number_lines(2, "eins\n\nzwei\n") == ["p2:L1\teins", "p2:L2\tzwei"]
 
 
+def test_prompt_asks_for_one_column_at_a_time():
+    flat = " ".join(PROMPT.split())
+    assert "one column completely" in flat and "Never put text from two columns on the same output line" in flat
+
+
 def test_prompt_forbids_correction_and_guessing_numbers():
     assert "Do not correct" in PROMPT and "Never guess a number" in PROMPT
 
