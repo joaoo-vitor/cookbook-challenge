@@ -1,6 +1,6 @@
 # Extract stage: working plan
 
-Status: transcription with Gemini and the two-model check are built and tested (see [README.md](README.md)). Retry and fallback, a structured transcript, structuring and validation are still planned. Items marked **(unverified)** came from web searches or my own recollection and must be checked before relying on them.
+Status: transcription with Gemini and the two-model check are built and tested (see [README.md](README.md)). Retry with fallback is built too. A structured transcript, structuring and validation are still planned. Items marked **(unverified)** came from web searches or my own recollection and must be checked before relying on them.
 
 ## 1. Goal
 
@@ -108,7 +108,7 @@ class VisionLLM(Protocol):
 - The key goes in `.env` as `GEMINI_API_KEY`, with a `.env.example` containing no real value.
 - Each result carries input, output and thinking tokens and the time taken, for the README's cost section.
 - The image type is read from the first bytes (PNG or JPEG), not assumed.
-- To do: retry with backoff on 503 and 429, and a fallback model.
+- Retry and fallback (built): temporary errors (408, 429, 5xx, timeouts) are retried up to 3 times per model with waits of 1, 2, 4 s (plus up to 25% jitter, at most 20 s). A model that cannot work (404) is skipped at once, and a fatal error (400, 401, 403) is raised. Then the next model in the fallback list is tried (`gemini-3.5-flash` by default). A fallback answer is cached under the model that gave it, and the primary model is tried again on the next call. Each request has a 90 s timeout, because we saw calls hang for 5 minutes. Each result records how many calls it took, which model it fell back from, and the errors.
 
 ## 7. Pipeline
 
@@ -168,7 +168,7 @@ Rules: an unquantified ingredient has `quantity = null`, never a made-up number.
 2. [x] `llm.py`: provider interface, Gemini client, cache, token and time logging
 3. [x] `transcribe.py`, and compare models on both pages, including degraded and illegible copies (section 5.3)
 4. [x] Send smaller JPEG images (a fixed 200 dpi render was the cause of slow calls)
-5. [ ] Retry with backoff and a fallback model in `llm.py`
+5. [x] Retry with backoff and a fallback model in `llm.py`
 6. [x] Two-model read: compare, flag differing words and numbers, page agreement score (section 7.1)
 7. [ ] A structured transcript: lines with ids, the source of each line, the model, the flags; join line-end hyphens
 8. [ ] `models.py`: schema and flag types

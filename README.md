@@ -36,7 +36,7 @@ The extract stage calls the Gemini API. Copy the example file and put your key i
 Copy-Item .env.example .env
 ```
 
-Then edit `.env` and set `GEMINI_API_KEY=`. Optionally set `GEMINI_MODEL=` (primary reader) and `GEMINI_SECOND_MODEL=` (second reader). `.env` is gitignored, so never commit it.
+Then edit `.env` and set `GEMINI_API_KEY=`. Optionally set `GEMINI_MODEL=` (primary reader), `GEMINI_SECOND_MODEL=` (second reader) and `GEMINI_FALLBACK_MODELS=` (comma-separated). `.env` is gitignored, so never commit it.
 
 ### The recipe PDF
 
@@ -101,6 +101,8 @@ python -m cookbook.extract Recipe.pdf --pages 1,2
 Options:
 - `--model NAME` sets the primary reader. Without it the code uses `GEMINI_MODEL` from `.env`, then `gemini-3.1-flash-lite`.
 - `--second-model NAME` sets the second reader. Without it: `GEMINI_SECOND_MODEL`, then `gemini-3.5-flash-lite`. It must be a different model from the first.
+- `--fallback-models A,B` lists the models to switch to when a reader's own model keeps failing. Without it: `GEMINI_FALLBACK_MODELS`, then `gemini-3.5-flash`.
+- `--no-fallback` never switches to another model.
 - `--single` reads with one model only, with no comparison and half the calls.
 - `--pages 1,2` limits the run to those pages (1-based).
 - `--out DIR` sets the output folder. The default is `data/experiments/`, which is gitignored.
@@ -124,7 +126,8 @@ page 1 [vision, vision] -> data\experiments\Recipe_gemini-3.1-flash-lite_p1.txt
 Things to know:
 - **Sending data:** this uploads images of your pages to Google. Free-tier prompts may be used for training in some regions, so do not send documents you must keep private.
 - **Cache:** answers are cached in `.cache/llm/`, keyed on provider, model, prompt and image. Running the same page again costs nothing. Delete the folder to force new calls.
-- **Errors:** a 503 "high demand" error is usually temporary, so run the command again. There is no automatic retry or fallback model yet.
+- **Retries and fallback:** a temporary error (a 503 "high demand", a 429 rate limit, a timeout) is retried up to 3 times per model, waiting about 1, 2, then 4 seconds. If the model still fails, or is not available to your key (a 404), the next fallback model is tried. Errors that retrying cannot fix (a bad key, a bad request) stop at once. Each request times out after 90 seconds. The summary shows when a call needed retries or a fallback, with the errors in `usage.json`.
+- **Fallback and the comparison:** a fallback answer is cached under the model that gave it. If both readers end up on the same model, the comparison is skipped with a warning, because two readings from one model are not independent.
 
 You can also call it from Python:
 
