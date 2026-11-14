@@ -12,6 +12,7 @@ from __future__ import annotations
 import difflib
 import re
 
+from cookbook.ingest.pdf import IMAGE_MARKER
 from cookbook.models import Issue, Recipe
 from cookbook.units import normalize_fractions, normalize_unit, numbers_in, parse_quantity
 
@@ -240,6 +241,8 @@ def _check_coverage(recipe: Recipe, tr: Transcript) -> list[Issue]:
             step_label.setdefault(min(known, key=order.index), s.n)
     for position, (line_id, line) in enumerate(tr.lines.items()):
         if re.fullmatch(r"\s*\d+\s*", line):  # a page number
+            continue
+        if IMAGE_MARKER.fullmatch(line.strip()):  # "[from image, page 1]": added by the program, not written in the recipe
             continue
         covered = {n for text in texts.get(line_id, []) for n in numbers_in(text)}
         body = line

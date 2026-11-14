@@ -269,6 +269,9 @@ def build_tasks(strategy: Strategy, regions: list[tuple[BBox, float]]) -> list[E
     return tasks
 
 
+IMAGE_MARKER = re.compile(r"\[from image, page \d+\]")  # the line merge_page_text puts before an image's text
+
+
 def merge_page_text(page: PageResult, image_texts: dict[int, str]) -> str:
     """Put the text read from images back into the page text, by position.
 

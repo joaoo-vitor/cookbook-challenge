@@ -226,6 +226,14 @@ def test_a_year_inside_the_recipe_is_still_a_high_issue():
     assert "high" in [i.severity for i in _find(validate(r, t), "uncovered_number")]
 
 
+def test_the_marker_added_for_text_read_from_an_image_is_not_a_number_to_cover():
+    t = _transcript()
+    t.lines = {"p1:L0": "[from image, page 1]", **t.lines}  # added by the program before an image's text
+    assert not _find(validate(_recipe(), t), "uncovered_number")
+    t.lines["p1:L0"] = "[from image, page 1] 12 eggs"  # a real line that only starts like the marker is still checked
+    assert _find(validate(_recipe(), t), "uncovered_number")
+
+
 def test_a_page_number_alone_on_a_line_needs_no_coverage():
     assert not _find(validate(_recipe(), _transcript()), "uncovered_number")
 
