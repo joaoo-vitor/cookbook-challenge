@@ -12,7 +12,7 @@ Built for the finlyt engineering case study. Stages: **ingest, extract, manipula
 | Manipulate | Change servings, make vegan | Not started | |
 | Output | Step-by-step recipe, changes against the original | Not started | |
 
-Not built yet: images and plain-text input, the rules engine (servings, vegan), the output renderers, `examples/` and `AI_LOG.md`.
+Not built yet: the rules engine (servings, vegan), the output renderers, `examples/` and `AI_LOG.md`.
 
 ## Setup
 
@@ -58,7 +58,7 @@ Claude is paid and has no free tier that I know of. The default is `claude-haiku
 
 ### Ingest
 
-Shows how each page of a PDF would be read.
+Shows how each page of a PDF, an image or a plain text file would be read. The kind of file is detected from its first bytes, not from its name.
 
 ```powershell
 python -m cookbook.ingest Recipe.pdf
@@ -131,6 +131,8 @@ For each page it writes these files into the output folder, named `<pdf name>_<p
 - `.flags.json`: the agreement, whether the page is unreliable, and every flag with its line id, both readings, kind and severity.
 - `.usage.json`: tokens, seconds and whether the answer came from the cache, for each reader.
 
+And once per run, `<pdf name>_<primary model>.run.json`: what the run used, with the number of calls (and how many came from the cache), fallbacks and extra attempts, the tokens in, out and thinking, the time of the calls added up and the wall-clock time, per model and in total, plus the unreliable pages and the issue counts. The tokens and seconds count every call, cached ones included, so they are what the same run uses with an empty cache. The same totals are printed at the end of the run.
+
 The command also prints a summary. Example for a readable page:
 
 ```
@@ -165,7 +167,7 @@ The model is not trusted. Every item must carry a quote copied from the transcri
 | `uncertain_reading` (high or medium) | the value sits on a line where the two readings disagreed |
 | `reading_order_differs` (medium) | the two readings put blocks of words in a different order (usually columns); one note per page |
 | `unused_ingredient`, `duplicate_ingredient`, `unknown_unit`, `servings_unknown`, `servings_inferred` (medium) | for example servings the recipe never states are not guessed silently |
-| `no_quantity`, `lines_corrected`, `wrong_lines`, `step_order` (low) | the source gives no amount (it is never guessed); the model cited the wrong line numbers for a quote that is in the transcript, and they were corrected; and similar notes |
+| `no_quantity`, `amount_not_verified`, `lines_corrected`, `wrong_lines`, `step_order` (low) | the source gives no amount (it is never guessed); the model cited the wrong line numbers for a quote that is in the transcript, and they were corrected; and similar notes |
 
 It writes three more files per run, named `<pdf name>_<primary model>`:
 - `.transcript.txt`: all pages joined, one written line per row with its id.
@@ -200,7 +202,8 @@ python -m cookbook.extract "C:\path\to\my recipe.pdf" --structure --out data/my_
 ```
 
 What to expect:
-- **Supported:** PDFs that are scanned or photographed, typed, or a mix, in any language. Images and plain-text files are not supported yet.
+- **Supported:** PDFs that are scanned or photographed, typed, or a mix; images (PNG, JPEG, GIF, TIFF, WebP), which are read like a scanned page; and plain text files, in any language. A text file needs no model reading at all: it is used as it is (UTF-8, UTF-16 with a BOM, or Windows-1252) and goes straight to the structuring call. Any other kind of file is refused.
+- **Line ids.** An id like `p1:L3` points at line 3 of page 1 of the *transcript*, which is saved as `.transcript.txt`. For a scan those are the written lines the model read (roughly the third visible line); for a typed PDF the lines of the text extraction; for a text file the file's own line numbers (blank lines count, and long lines are not wrapped). A PDF has no line numbers of its own, so the quote stored with every value is the stable anchor: search for it in the source.
 - **One recipe per PDF.** The schema holds a single recipe, so a PDF with a whole cookbook would be merged into one wrong recipe. Pick the pages of one recipe with `--pages`, for example `--pages 12,13`.
 - **Calls and time.** A typed page needs no reading call, so only the structuring call is made (about 4 seconds). A scanned page is read by two models, then one structuring call is made (about 10 seconds for two pages). Results are cached, so running the same command again is free and gives the same answer. Delete `.cache/llm/` to start over.
 - **Privacy.** Scanned pages (as images) and the transcript text are sent to Google. Do not use documents you must keep private.

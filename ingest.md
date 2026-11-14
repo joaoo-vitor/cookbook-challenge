@@ -311,7 +311,17 @@ page 2: VISION
 
 ## 13. Not done yet
 
-- Images and plain-text input (the assignment requires them).
-- The vision model call that transcribes `VISION` pages and image tasks.
 - Detecting a partial OCR layer, where the layer covers only part of the page.
-- Multi-column reading order in `merge_page_text`.
+- Multi-column reading order in `merge_page_text`, and for typed PDFs: the text extraction sorts by position, which on a two-column page puts a left and a right item on the same line (seen on a generated test PDF; not yet checked on a real typed PDF).
+
+(Added later: images and plain-text input, section 14. The vision model call is in the extract stage, see `extract.md`.)
+
+## 14. Any kind of input (added later)
+
+`analyze_pdf` still handles PDFs. `analyze_document(path)` is the entry point for everything:
+
+- **`detect_kind(path)`** reads the first 2,048 bytes and decides, not by the file name: `%PDF` is a PDF; a PNG, JPEG, GIF, TIFF (`II*\0`, `MM\0*`) or WebP (`RIFF....WEBP`) signature is an image; otherwise a file with NUL bytes (and no UTF-16 BOM) raises `ValueError("... is not a PDF, an image or a text file")`; anything else is text. An empty file is text.
+- **Images** go through `analyze_pdf`: PyMuPDF opens an image as a document of one page, so a photo is a page with one big image and no text, which the normal rules route to `VISION`. The pages are marked `kind = "image"`.
+- **Text files** go through `analyze_text`, which returns one page, `kind = "text"`, strategy `TEXT_DIGITAL` (or `EMPTY` for a blank file), no tasks, and the file's text exactly as read. It is not run through MuPDF, because MuPDF re-wraps long lines to a page width and then the line ids would not match the file. Decoding: UTF-16 if there is a BOM, otherwise UTF-8 (a UTF-8 BOM is dropped), otherwise Windows-1252.
+- `PageResult` has a new field `kind` (`"pdf"` by default).
+- In the extract stage a text page has `source = "text_file"`, is never sent to a model, and its lines are numbered over *all* lines of the file (`number_lines(..., count_blank=True)`), so `p1:L4` is line 4 of the file even when line 2 is blank. For model readings blank lines are not counted.
