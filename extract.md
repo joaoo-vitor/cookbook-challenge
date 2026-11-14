@@ -93,7 +93,7 @@ All numbers come from two pages of one recipe, so they are a rough signal, not a
 - **Image size was the main cause of slow calls.** Sending a 41 MB PNG (a fixed 200 dpi render) took 15 to 75 s per page. A JPEG of about 1 MB takes 3 to 6 s with the same transcript quality.
 - **Reliability:** repeated 503 "high demand" errors on `gemini-3.5-flash` and Gemma. The client needs retry with backoff and a fallback model.
 - **Columns (a two-column ingredient list, an old English recipe):** with the first prompt the two readers read the same words in a different order. `gemini-3.1-flash-lite` read row by row across the columns, so each line mixed two ingredients, while `gemini-3.5-flash-lite` read column by column. Ignoring order the readings shared 96% of their words, but the comparison is order-sensitive, so it gave 0.83 agreement, marked the page unreliable and produced 22 high issues. After adding the column rule to the prompt (one column completely before the next) both readers read column by column, agreement was 1.00, and the structured recipe had all 10 ingredients with correct amounts; the issues fell to 2 high, 1 medium. The prompt rule worked for this image; it is not a guarantee, because a model may still ignore it. Still open: the comparison itself is order-sensitive, and layout is not detected in the image.
-- **Remaining issues on that recipe, both from the checks and not the reading:** a quote that contained a hyphenated line break ("pre-" and "pared") was reported unsupported, and a package size inside a unit ("1 9-ounce can") is an unknown unit and leaves the "9" uncovered.
+- **The two issues left on that recipe came from the checks, not the reading, and are fixed:** a quote that kept a hyphenated line break ("pre-" and "pared") was reported unsupported, and a package size inside a unit ("1 9-ounce can") was an unknown unit and left the "9" uncovered. The quote is now also tried with such breaks joined, and a container with its size in front ("9-ounce can", "16 oz. jar") is counted by its container, with the numbers in the unit counting as covered. The recipe now has 0 high and 0 medium issues. Pancakes and the Sauerbraten still have no high issues.
 
 ## 6. Provider interface (`src/cookbook/llm.py`)
 
@@ -136,7 +136,7 @@ class VisionLLM(Protocol):
 
 ### 7.3 Validate (plain code, built, `validate.py`)
 The checks never fix or drop anything. Each problem is an `Issue` with a code and a severity.
-1. **Grounding:** each item's quote must be in the transcript, on the lines it cites (at least 80% of its words, in order, ignoring case, punctuation and hyphens). Not found anywhere: `unsupported_quote` (high), possibly invented. Found on other lines: `wrong_lines` (low).
+1. **Grounding:** each item's quote must be in the transcript, on the lines it cites (at least 80% of its words, in order, ignoring case, punctuation and hyphens; a quote that kept a hyphenated line break matches too). Not found anywhere: `unsupported_quote` (high), possibly invented. Found on other lines: `wrong_lines` (low).
 2. **Amount check:** a quantity needs words behind it (`invented_quantity`), and the number parsed from those words (½, 1/2, 1,5, "ein halbes Pfund") must equal the quantity (`quantity_mismatch`). The unit must be known (`unknown_unit`) and match the words (`unit_mismatch`). An ingredient with no amount is fine (`no_quantity`, low): amounts are never guessed.
 3. **Coverage:** every number on a transcript line must appear in a structured field extracted from that line (amount, step text, duration, condition, servings), not only in a quote. This catches dropped quantities and durations (`uncovered_number`, high; medium on a line before the first or after the last extracted line, such as a header). A page number alone on a line is skipped.
 4. **Integrity:** steps reference ingredients and tools that exist, ids are unique, every ingredient is used in a step, the same ingredient is not listed twice, steps are numbered in order.
@@ -144,7 +144,7 @@ The checks never fix or drop anything. Each problem is an `Issue` with a code an
 6. **Uncertainty:** an item on a line where the two readings disagreed is `uncertain_reading`; severity follows the comparison's.
 7. **Totals:** only if the recipe states them (none of the recipes seen so far do).
 
-Unit conversion (`units.py`): Pfund is 500 g, Loth about 16.7 g (approximate), Schoppen about 250 ml (approximate: a quarter to half a litre by region), spoons and cups are rough volumes (approximate), counted units (Prise, Stück, Zehe) do not convert.
+Unit conversion (`units.py`): Pfund is 500 g, Loth about 16.7 g (approximate), Schoppen about 250 ml (approximate: a quarter to half a litre by region), spoons and cups are rough volumes (approximate), counted units (Prise, Stück, Zehe, Dose, Glas, Packung, Flasche) do not convert, and a container with its size in front ("9-ounce can") counts as the container.
 
 ### 7.4 What structuring showed on `Recipe.pdf`
 One run of `gemini-3.1-flash-lite` on the transcript, after one round of prompt changes. A single recipe, so a rough signal.
