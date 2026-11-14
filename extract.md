@@ -1,6 +1,6 @@
 # Extract stage: working plan
 
-Status: transcription with Gemini is built and tested (see [README.md](README.md)). The two-model check, structuring and validation are still planned. Items marked **(unverified)** came from web searches or my own recollection and must be checked before relying on them.
+Status: transcription with Gemini and the two-model check are built and tested (see [README.md](README.md)). Retry and fallback, a structured transcript, structuring and validation are still planned. Items marked **(unverified)** came from web searches or my own recollection and must be checked before relying on them.
 
 ## 1. Goal
 
@@ -116,13 +116,15 @@ class VisionLLM(Protocol):
 - Prompt: transcribe exactly, one line per output line, keep old spelling, write `[?word?]` for anything unreadable, do not interpret, do not fix. (Built.)
 - Output: one transcript with line ids (`p1:L1`, ...), pages joined so a sentence crossing a page break stays whole. Hyphenated line ends (like "Bra-tenstücke") are joined by plain code, and the join is recorded. (Line ids exist in the CLI output; the joined, structured transcript is to do.)
 - Digital pages (`TEXT_*`) skip this and use the text layer. Image tasks use `merge_page_text`. (Built.)
-- **Two reads (to do).** Each page is read by two different models (primary `gemini-3.1-flash-lite`, second `gemini-3.5-flash-lite`), in parallel. The primary reading is the transcript. Then plain code compares the two:
+- **Two reads (built, `compare.py`).** Each page is read by two different models (primary `gemini-3.1-flash-lite`, second `gemini-3.5-flash-lite`), in parallel. The primary reading is the transcript. Then plain code compares the two:
   1. Normalise both (join line-end hyphens, unify dashes, ignore the `[?` `?]` brackets), then align the words.
   2. Every span where they differ becomes a **flag** on the primary's words: "not certain". A difference in a number or fraction is a higher severity than a difference in a word.
-  3. Ignore differences that are not content: a page number present in only one read, punctuation-only changes, and the split of a drawing label across lines.
+  3. Ignore differences that are not content: punctuation-only changes, hyphens, spacing and dash characters (so "Korin-then", "Korin then" and "Korinthen" match), a single non-numeric word that only moved (a drawing label listed in a different order), and a bare number alone on the first or last line that only one read has (a page number). A quantity at the start of a line is never ignored.
   4. Compute a **page agreement** score (word similarity between the two reads). Below about 0.85 the whole page is flagged unreliable (a guess to tune on more pages), because on illegible pages each model invents different text.
-  5. A `[?...?]` marker in either read is also a flag.
+  5. A `[?...?]` marker in the primary read is also a flag. Markers in the second read are only counted.
+  6. If the second reader fails, the primary reading is kept with a warning and no comparison. Using the same model twice is refused.
   No third model or re-read for now: flagged values are shown as not certain, and the reviewer decides.
+  Observed on `Recipe.pdf` (page agreement): clean pages 0.98 and 0.99 with one flag each (one was the second model being wrong, which is still the right thing to flag); the 150 px copy 0.91 and 0.76 (unreliable); the 90 px copy 0.12 and 0.18 (unreliable).
 
 ### 7.2 Structure (text to schema)
 - One call turns the transcript into the schema below.
@@ -167,7 +169,7 @@ Rules: an unquantified ingredient has `quantity = null`, never a made-up number.
 3. [x] `transcribe.py`, and compare models on both pages, including degraded and illegible copies (section 5.3)
 4. [x] Send smaller JPEG images (a fixed 200 dpi render was the cause of slow calls)
 5. [ ] Retry with backoff and a fallback model in `llm.py`
-6. [ ] Two-model read: compare, flag differing words and numbers, page agreement score (section 7.1)
+6. [x] Two-model read: compare, flag differing words and numbers, page agreement score (section 7.1)
 7. [ ] A structured transcript: lines with ids, the source of each line, the model, the flags; join line-end hyphens
 8. [ ] `models.py`: schema and flag types
 9. [ ] `units.py`: parse quantities (fractions, decimals with comma) and map units, with tests

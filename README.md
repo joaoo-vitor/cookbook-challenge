@@ -8,7 +8,7 @@ Built for the finlyt engineering case study. Stages: **ingest, extract, manipula
 | Stage | What it does | Status | Guide |
 |---|---|---|---|
 | Ingest | Decides, per PDF page, how to read it (text layer, OCR layer, or vision model) | Built (PDF only) | [ingest.md](ingest.md) |
-| Extract | Transcribes pages with a vision model; structuring and validation come next | Transcription built, rest planned | [extract.md](extract.md) |
+| Extract | Transcribes pages with two vision models and flags where they disagree; structuring and validation come next | Two-model transcription built, rest planned | [extract.md](extract.md) |
 | Manipulate | Change servings, make vegan | Not started | |
 | Output | Step-by-step recipe, changes against the original | Not started | |
 
@@ -36,7 +36,7 @@ The extract stage calls the Gemini API. Copy the example file and put your key i
 Copy-Item .env.example .env
 ```
 
-Then edit `.env` and set `GEMINI_API_KEY=`. Optionally set `GEMINI_MODEL=` as well. `.env` is gitignored, so never commit it.
+Then edit `.env` and set `GEMINI_API_KEY=`. Optionally set `GEMINI_MODEL=` (primary reader) and `GEMINI_SECOND_MODEL=` (second reader). `.env` is gitignored, so never commit it.
 
 ### The recipe PDF
 
@@ -77,7 +77,14 @@ A typed page with an image that may hold text also lists an `extra task` line fo
 
 ### Extract
 
-Reads every page and writes a transcript. Typed pages use their text layer and never call the model. `VISION` pages and images on typed pages are rendered (a JPEG at the photo's own resolution, at most 2400 px on the longest side) and sent to Gemini.
+Reads every page and writes a transcript. Typed pages use their text layer and never call a model. `VISION` pages and images on typed pages are rendered (a JPEG at the photo's own resolution, at most 2400 px on the longest side) and sent to Gemini.
+
+**Two readers.** By default two different models read the same image at the same time. The first model's reading is the transcript. Plain code then compares the two readings word by word:
+- Every place where they differ is a **flag**: that word or number is not certain. A difference in a number or fraction is high severity, any other word is medium.
+- Differences that are not content are ignored: line-end hyphens, spacing and dash characters, punctuation, a drawing label listed in a different order, and a page number that only one reading has.
+- The **agreement** (word similarity of the two readings, 0 to 1) is reported for each page. Below 0.85 the page is marked **UNRELIABLE**, because on an illegible page each model invents different text.
+- If the second reader fails (for example a 503), you still get the first reading, with a warning and no comparison.
+- Both readers are Gemini models, so a mistake they share is not flagged. Agreement does not prove a reading is right.
 
 First, see which models your key can use. Model names change often, and some are closed to new users:
 
@@ -88,17 +95,31 @@ python -m cookbook.extract --list-models
 Then transcribe:
 
 ```powershell
-python -m cookbook.extract Recipe.pdf --pages 1,2 --model gemini-3.1-flash-lite
+python -m cookbook.extract Recipe.pdf --pages 1,2
 ```
 
 Options:
-- `--model NAME` picks the model. Without it the code uses `GEMINI_MODEL` from `.env`, then a built-in alias that may not exist for your key.
+- `--model NAME` sets the primary reader. Without it the code uses `GEMINI_MODEL` from `.env`, then `gemini-3.1-flash-lite`.
+- `--second-model NAME` sets the second reader. Without it: `GEMINI_SECOND_MODEL`, then `gemini-3.5-flash-lite`. It must be a different model from the first.
+- `--single` reads with one model only, with no comparison and half the calls.
 - `--pages 1,2` limits the run to those pages (1-based).
 - `--out DIR` sets the output folder. The default is `data/experiments/`, which is gitignored.
 
-For each page it writes two files into the output folder:
-- `<pdf name>_<model>_p<N>.txt`: the transcript, one line per written line, each prefixed with an id like `p1:L3`.
-- `<pdf name>_<model>_p<N>.usage.json`: input, output and thinking tokens, seconds, and whether the answer came from the cache.
+The model names above worked for our key in November 2026. They may be retired, so check `--list-models`.
+
+For each page it writes these files into the output folder, named `<pdf name>_<primary model>_p<N>`:
+- `.txt`: the transcript (the first reading), one line per written line, each prefixed with an id like `p1:L3`.
+- `.second.txt`: the second reading, in the same format.
+- `.flags.json`: the agreement, whether the page is unreliable, and every flag with its line id, both readings, kind and severity.
+- `.usage.json`: tokens, seconds and whether the answer came from the cache, for each reader.
+
+The command also prints a summary. Example for a readable page:
+
+```
+page 1 [vision, vision] -> data\experiments\Recipe_gemini-3.1-flash-lite_p1.txt
+  page: agreement 0.98 (reads agree), 1 flag(s)
+    [medium] p1:L4 word: 'Josefines' vs 'Josefinés'
+```
 
 Things to know:
 - **Sending data:** this uploads images of your pages to Google. Free-tier prompts may be used for training in some regions, so do not send documents you must keep private.
@@ -111,8 +132,14 @@ You can also call it from Python:
 from cookbook.llm import GeminiClient
 from cookbook.extract import transcribe_pdf
 
-pages = transcribe_pdf("Recipe.pdf", GeminiClient(model="gemini-3.1-flash-lite"))
-print(pages[0].text)
+pages = transcribe_pdf(
+    "Recipe.pdf",
+    GeminiClient(model="gemini-3.1-flash-lite"),
+    second=GeminiClient(model="gemini-3.5-flash-lite"),  # leave out for a single read
+)
+print(pages[0].text)  # the transcript
+for c in pages[0].comparisons:
+    print(c.label, c.agreement, c.unreliable, c.flags)
 ```
 
 ## Tests
@@ -136,7 +163,7 @@ Open the folder in VS Code and pick the `.venv` interpreter (Ctrl+Shift+P, "Pyth
 ```
 src/cookbook/
   ingest/        decide how to read each page (pdf.py, CLI in __main__.py)
-  extract/       transcribe pages with a vision model (transcribe.py, CLI in __main__.py)
+  extract/       transcribe pages with two vision models (transcribe.py), compare the readings (compare.py), CLI in __main__.py
   llm.py         the only module that talks to a model provider (Gemini client, cache)
 tests/           offline tests
 evals/           scripts for comparing models on degraded scans
