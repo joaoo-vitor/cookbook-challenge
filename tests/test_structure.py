@@ -73,6 +73,24 @@ def test_retries_can_be_turned_off():
     assert len(llm.calls) == 1
 
 
+def test_a_wrong_line_citation_is_corrected_and_reported_as_low():
+    bad = _recipe()
+    bad.ingredients[0].lines = ["p1:L5"]  # the quote "500 g Rindfleisch" is on L2
+    result = structure_recipe(_transcript(), FakeTextLLM(_json(bad)))
+    assert result.recipe.ingredients[0].lines == ["p1:L2"]
+    codes = [i.code for i in result.issues]
+    assert "lines_corrected" in codes and "wrong_lines" not in codes
+    assert not [i for i in result.issues if i.severity == "high"]
+
+
+def test_the_schema_the_model_receives_explains_the_id_format_and_the_lines():
+    props = Recipe.model_json_schema()["$defs"]
+    assert "i1, i2" in props["Ingredient"]["properties"]["id"]["description"]
+    assert "t1, t2" in props["Tool"]["properties"]["id"]["description"]
+    for kind in ("Ingredient", "Tool", "Step", "Servings"):
+        assert "every transcript line" in props[kind]["properties"]["lines"]["description"]
+
+
 def test_the_prompt_forbids_guessing():
     flat = " ".join(PROMPT.split())  # the prompt wraps lines; compare without the line breaks
     for rule in ("Never add an ingredient", "Never guess an amount", "copied exactly", "`stated` is false"):

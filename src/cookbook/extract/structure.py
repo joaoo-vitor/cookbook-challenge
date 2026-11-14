@@ -16,8 +16,9 @@ from pydantic import ValidationError
 from cookbook.llm import LLMResult, TextLLM
 from cookbook.models import Issue, Recipe
 
+from .repair import repair_citations
 from .transcript import Transcript
-from .validate import validate
+from .validate import sort_issues, validate
 
 PROMPT = """You turn the transcript of a recipe into structured data. The transcript has one written line
 per row, each starting with a line id (like p1:L3), a tab, then the text. Lines marked [drawing] are
@@ -26,7 +27,8 @@ labels written inside a drawing.
 Rules:
 - Use only what the transcript says. Never add an ingredient, a quantity or a step that is not written.
 - Every ingredient, tool, step and the servings need a `quote`: words copied exactly from the transcript
-  (keep the old spelling), and `lines`: the ids of the lines the quote is on.
+  (keep the old spelling), and `lines`: the ids of every line the quote touches. A quote that runs on to
+  the next line, or finishes a word hyphenated at the end of a line, touches both lines.
 - Keep names, steps and notes in the language of the recipe. `name_en` is a short English label.
 - Ingredients can appear anywhere in the text, also only inside the method. Include each one once. A
   drawing label that repeats an ingredient is not a separate ingredient: cite both lines.
@@ -79,4 +81,5 @@ def structure_recipe(transcript: Transcript, llm: TextLLM, retries: int = 1) -> 
                 raise StructureError(f"the model's answer is not a valid recipe: {str(err)[:300]}") from err
             prompt = (PROMPT + f"\n\nYour previous answer was not valid: {str(err)[:400]}\n"
                       "Answer again with corrected JSON only.")
-    return Structured(recipe, validate(recipe, transcript), calls)
+    recipe, corrections = repair_citations(recipe, transcript)  # fix pointers, never the content
+    return Structured(recipe, sort_issues(validate(recipe, transcript) + corrections), calls)

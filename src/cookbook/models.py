@@ -10,6 +10,8 @@ ingredient without an amount has `quantity = None`, and servings the recipe neve
 states are marked `stated = False`.
 
 The model fills these classes; plain code then checks them (see extract/validate.py).
+The `description` of each field is part of the schema the model receives, so it is
+written for the model.
 """
 
 from __future__ import annotations
@@ -20,49 +22,55 @@ from pydantic import BaseModel, Field
 
 
 class Ingredient(BaseModel):
-    id: str  # "i1", "i2", ...
-    name: str  # as written in the source
-    name_en: str  # short English label for rules (vegan, scaling)
-    quantity: float | None = None  # the number given in the source; None if it gives none
-    quantity_text: str | None = None  # the words that give the amount, exactly as written ("1/2 l", "einige")
-    unit: str | None = None  # as written ("l", "Pfund")
-    prep_note: str | None = None  # "in Scheiben geschnitten"
-    optional: bool = False  # only if the source says so ("kann man", "nach Belieben")
-    quote: str  # verbatim words from the transcript that support this ingredient
-    lines: list[str] = Field(default_factory=list)  # transcript line ids, like "p1:L13"
+    id: str = Field(description="Short id: i1, i2, i3, ... in the order the ingredients appear in the text.")
+    name: str = Field(description="The ingredient as written in the source, without amount or unit.")
+    name_en: str = Field(description="A short English label, such as 'sour cream'.")
+    quantity: float | None = Field(
+        default=None, description="The number the text gives, as a decimal (1/2 is 0.5). Null if the text gives none.")
+    quantity_text: str | None = Field(
+        default=None, description="The words that give the amount, exactly as written, such as '1/2' or 'einige'.")
+    unit: str | None = Field(default=None, description="The unit exactly as written, such as 'l' or 'cup'.")
+    prep_note: str | None = Field(default=None, description="How it is prepared, such as 'in Scheiben geschnitten'.")
+    optional: bool = Field(default=False, description="True only if the text presents it as something you may add or leave out.")
+    quote: str = Field(description="Words copied exactly from the transcript that show this ingredient.")
+    lines: list[str] = Field(
+        default_factory=list,
+        description="Ids of every transcript line the quote touches, such as ['p1:L13', 'p1:L14'].")
 
 
 class Tool(BaseModel):
-    id: str  # "t1", ...
+    id: str = Field(description="Short id: t1, t2, ... in order of appearance.")
     name: str
-    name_en: str
-    implied: bool = False  # True when the recipe never names it (a knife for "in Scheiben schneiden")
-    quote: str  # the words that name or imply it
-    lines: list[str] = Field(default_factory=list)
+    name_en: str = Field(description="A short English label, such as 'frying pan'.")
+    implied: bool = Field(
+        default=False, description="True if the text never names the tool and it only follows from an action.")
+    quote: str = Field(description="Words copied exactly from the transcript that name or imply it.")
+    lines: list[str] = Field(default_factory=list, description="Ids of every transcript line the quote touches.")
 
 
 class Step(BaseModel):
-    n: int  # 1, 2, ... in the order of the recipe
-    text: str  # the step, as in the source
-    ingredient_ids: list[str] = Field(default_factory=list)
-    tool_ids: list[str] = Field(default_factory=list)
-    duration_text: str | None = None  # "eine Stunde", "nach 8 Tagen"
-    condition: str | None = None  # "wenn er knusprig ist"
-    quote: str
-    lines: list[str] = Field(default_factory=list)
+    n: int = Field(description="1, 2, 3, ... in the order of the recipe.")
+    text: str = Field(description="The step, keeping any time, number or condition the transcript gives.")
+    ingredient_ids: list[str] = Field(default_factory=list, description="Ids from the ingredient list that the step uses.")
+    tool_ids: list[str] = Field(default_factory=list, description="Ids from the tool list that the step uses.")
+    duration_text: str | None = Field(default=None, description="A duration as written, such as 'eine Stunde'.")
+    condition: str | None = Field(default=None, description="A condition as written, such as 'wenn er knusprig ist'.")
+    quote: str = Field(description="Words copied exactly from the transcript for this step.")
+    lines: list[str] = Field(default_factory=list, description="Ids of every transcript line the quote touches.")
 
 
 class Servings(BaseModel):
-    value: int | None = None
-    stated: bool = False  # False: the recipe does not say; `value`, if any, is a guess
-    basis: str | None = None  # why the guess, when not stated
-    quote: str | None = None
-    lines: list[str] = Field(default_factory=list)
+    value: int | None = Field(default=None, description="Number of servings, or null if unknown.")
+    stated: bool = Field(
+        default=False, description="True only if the text says how many it serves. Otherwise false, and value is a guess.")
+    basis: str | None = Field(default=None, description="When stated is false: the reason for the guess.")
+    quote: str | None = Field(default=None, description="When stated is true: words copied exactly from the transcript.")
+    lines: list[str] = Field(default_factory=list, description="Ids of every transcript line the quote touches.")
 
 
 class Recipe(BaseModel):
     title: str | None = None
-    language: str | None = None  # "de", "en", ...
+    language: str | None = Field(default=None, description="ISO code of the recipe's language, such as 'de' or 'en'.")
     servings: Servings = Field(default_factory=Servings)
     ingredients: list[Ingredient] = Field(default_factory=list)
     tools: list[Tool] = Field(default_factory=list)
