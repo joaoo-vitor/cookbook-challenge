@@ -207,9 +207,23 @@ def test_an_ordinal_that_starts_a_line_in_the_middle_of_a_step_is_still_checked(
 
 def test_a_number_before_the_first_extracted_line_is_only_a_medium_issue():
     t = _transcript()
-    t.lines = {"p0:L1": "Anno 1887", **t.lines}  # a header the recipe does not use
+    t.lines = {"p0:L1": "Rezept Nr. 17", **t.lines}  # outside the recipe, but it could be a dropped amount
     [issue] = _find(validate(_recipe(), t), "uncovered_number")
     assert issue.refers_to == "p0:L1" and issue.severity == "medium" and "header" in issue.message
+
+
+def test_a_year_outside_the_extracted_text_is_only_a_low_note():
+    t = _transcript()
+    t.lines = {"p0:L1": "Anno 1887", **t.lines}  # the book's date, not a quantity
+    [issue] = _find(validate(_recipe(), t), "uncovered_number")
+    assert issue.refers_to == "p0:L1" and issue.severity == "low" and "year" in issue.message
+
+
+def test_a_year_inside_the_recipe_is_still_a_high_issue():
+    r = _with_ingredient(_recipe(), "i1", quantity=None, quantity_text=None, unit=None, quote="Rindfleisch")
+    t = _transcript()
+    t.lines["p1:L2"] = "Für 4 Personen nimmt man 1887 g Rindfleisch, 2 Zwiebeln,"  # a real amount that looks like a year
+    assert "high" in [i.severity for i in _find(validate(r, t), "uncovered_number")]
 
 
 def test_a_page_number_alone_on_a_line_needs_no_coverage():

@@ -250,8 +250,13 @@ def _check_coverage(recipe: Recipe, tr: Transcript) -> list[Issue]:
         if missing:
             shown = ", ".join(f"{n:g}" for n in missing)
             outside = position < first or position > last
+            # outside the extracted text, only a year ("Anno 1887") is surely not a quantity: any other
+            # number there could be a dropped amount (an ingredient nobody listed), so it stays medium
+            year = outside and all(float(n).is_integer() and 1000 <= n <= 2100 for n in missing)
             out.append(Issue(
-                code="uncovered_number", severity="medium" if outside else "high", refers_to=line_id, lines=[line_id],
+                code="uncovered_number", severity="low" if year else "medium" if outside else "high",
+                refers_to=line_id, lines=[line_id],
                 message=f"the transcript has {shown} on this line, but nothing extracted from it has that number"
-                        + (" (the line is outside the extracted text, maybe a header or footer)" if outside else "")))
+                        + (" (a year outside the extracted text: probably a header or footer)" if year
+                           else " (the line is outside the extracted text, maybe a header or footer)" if outside else "")))
     return out
