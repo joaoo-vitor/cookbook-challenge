@@ -83,6 +83,16 @@ def test_a_wrong_line_citation_is_corrected_and_reported_as_low():
     assert not [i for i in result.issues if i.severity == "high"]
 
 
+def test_a_line_id_the_model_copied_into_a_quote_does_not_make_the_item_look_invented():
+    bad = _recipe()
+    bad.ingredients[0].quote = "500 g\np1:L2 Rindfleisch"  # the id of the line it was copied from
+    result = structure_recipe(_transcript(), FakeTextLLM(_json(bad)))
+    assert result.recipe.ingredients[0].quote == "500 g Rindfleisch"
+    codes = [i.code for i in result.issues]
+    assert "quote_cleaned" in codes and "unsupported_quote" not in codes
+    assert not [i for i in result.issues if i.severity == "high"]
+
+
 def test_the_schema_the_model_receives_explains_the_id_format_and_the_lines():
     props = Recipe.model_json_schema()["$defs"]
     assert "i1, i2" in props["Ingredient"]["properties"]["id"]["description"]

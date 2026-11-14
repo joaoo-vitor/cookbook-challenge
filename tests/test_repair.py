@@ -98,6 +98,30 @@ def test_an_item_without_a_quote_is_skipped():
     assert issues == [] and fixed.ingredients[0].lines == ["p1:L1"]
 
 
+def test_a_line_id_copied_into_a_quote_is_removed_and_reported():
+    from cookbook.extract.repair import clean_quotes
+
+    tool = _tool(["p1:L3", "p1:L4"], quote="8 1/2x4 1/2x2 1/2-\np1:L4 inch loaf pan")
+    fixed, [note] = clean_quotes(_recipe(tool))
+    assert fixed.tools[0].quote == "8 1/2x4 1/2x2 1/2- inch loaf pan"
+    assert (note.code, note.severity, note.refers_to) == ("quote_cleaned", "low", "loaf_pan")
+    assert "p1:L4" in note.message  # what was removed is in the note
+    assert "unsupported_quote" not in [i.code for i in validate(fixed, _transcript())]  # after: found
+
+
+def test_ids_of_every_form_are_removed_and_clean_quotes_are_left_alone():
+    from cookbook.extract.repair import clean_quotes
+
+    ing = Ingredient(id="i1", name="x", name_en="x", quote="2 eggs p3:image0:L2 beaten p12:L103", lines=[])
+    fixed, [note] = clean_quotes(Recipe(ingredients=[ing]))
+    assert fixed.ingredients[0].quote == "2 eggs beaten"
+    same, notes = clean_quotes(_recipe(_tool(["p1:L3"], quote="inch loaf pan")))
+    assert notes == [] and same.tools[0].quote == "inch loaf pan"
+    # a word that only looks a little like an id is not touched
+    word = Ingredient(id="i2", name="x", name_en="x", quote="Pasta p1 and L3 sauce", lines=[])
+    assert clean_quotes(Recipe(ingredients=[word]))[1] == []
+
+
 def test_after_repair_the_checks_no_longer_report_wrong_lines():
     fixed, _ = repair_citations(_recipe(_tool(["p1:L3"])), _transcript())
     assert "wrong_lines" not in [i.code for i in validate(fixed, _transcript())]

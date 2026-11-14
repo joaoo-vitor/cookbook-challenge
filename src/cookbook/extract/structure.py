@@ -16,7 +16,7 @@ from pydantic import ValidationError
 from cookbook.llm import LLMResult, TextLLM
 from cookbook.models import Issue, Recipe
 
-from .repair import repair_citations
+from .repair import clean_quotes, repair_citations
 from .transcript import Transcript
 from .validate import sort_issues, validate
 
@@ -47,7 +47,9 @@ Rules:
 - Steps follow the order of the recipe, numbered from 1. List the ids of the ingredients and tools each
   step uses. Copy durations and conditions as written ("nach 8 Tagen", "wenn er knusprig ist").
 - Servings: if the text says how many people it serves, `stated` is true with its quote. If not, `stated`
-  is false: give a best estimate in `value` with the reason in `basis`, or null if you cannot estimate.
+  is false and you must still give your best estimate in `value`: how many people the dish would
+  typically serve, judging from the dish and from any amounts in the text. Put the reasoning in `basis`.
+  The estimate is shown to the user as an estimate and they can change it.
 - `language` is the ISO code of the recipe's language.
 Answer with the JSON only."""
 
@@ -81,5 +83,6 @@ def structure_recipe(transcript: Transcript, llm: TextLLM, retries: int = 1) -> 
                 raise StructureError(f"the model's answer is not a valid recipe: {str(err)[:300]}") from err
             prompt = (PROMPT + f"\n\nYour previous answer was not valid: {str(err)[:400]}\n"
                       "Answer again with corrected JSON only.")
+    recipe, cleaned = clean_quotes(recipe)  # line ids the model copied into a quote are not recipe words
     recipe, corrections = repair_citations(recipe, transcript)  # fix pointers, never the content
-    return Structured(recipe, sort_issues(validate(recipe, transcript) + corrections), calls)
+    return Structured(recipe, sort_issues(validate(recipe, transcript) + cleaned + corrections), calls)
