@@ -225,6 +225,33 @@ def test_an_unknown_unit_is_flagged_as_not_convertible():
     assert _find(validate(r, _transcript()), "unknown_unit", "i1")
 
 
+def test_a_number_written_in_words_the_parser_does_not_know_is_not_called_wrong():
+    # Portuguese "duas xícaras": no digits, and neither word is in the tables
+    r = _with_ingredient(_recipe(), "i1", quantity=2, quantity_text="duas", unit="xícaras", quote="500 g Rindfleisch")
+    issues = validate(r, _transcript())
+    [note] = _find(issues, "amount_not_verified", "i1")
+    assert note.severity == "low" and "duas" in note.message
+    assert not _find(issues, "quantity_mismatch", "i1")
+    assert _find(issues, "unknown_unit", "i1")  # the unit is still reported
+
+
+def test_digits_are_checked_in_any_language():
+    ok = validate(_with_ingredient(_recipe(), "i1", quantity=2, quantity_text="2", unit="xícaras"), _transcript())
+    assert not _find(ok, "quantity_mismatch", "i1") and not _find(ok, "amount_not_verified", "i1")
+    wrong = validate(_with_ingredient(_recipe(), "i1", quantity=3, quantity_text="2", unit="xícaras"), _transcript())
+    assert _find(wrong, "quantity_mismatch", "i1")[0].severity == "high"
+
+
+def test_a_number_invented_for_a_vague_word_is_still_a_high_mismatch():
+    r = _with_ingredient(_recipe(), "i3", quantity=3)  # quantity_text is "etwas"
+    assert _find(validate(r, _transcript()), "quantity_mismatch", "i3")[0].severity == "high"
+
+
+def test_a_wrong_number_in_a_known_language_is_still_a_high_mismatch():
+    r = _with_ingredient(_recipe(), "i5", quantity=3, quantity_text="einen")  # "einen" means 1
+    assert _find(validate(r, _transcript()), "quantity_mismatch", "i5")[0].severity == "high"
+
+
 def test_a_number_in_the_amount_text_with_no_quantity_is_flagged():
     r = _with_ingredient(_recipe(), "i2", quantity=None)
     assert _find(validate(r, _transcript()), "quantity_mismatch", "i2")

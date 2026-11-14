@@ -126,7 +126,13 @@ def _check_amount(ing) -> list[Issue]:
                              message=f"quantity {ing.quantity:g} has no words in the source that give it"))
         else:
             parsed = parse_quantity(ing.quantity_text)
-            if parsed.value is None or abs(parsed.value - ing.quantity) > 1e-6:
+            if parsed.value is None and parsed.vague is None and not numbers_in(ing.quantity_text):
+                # No digits, and words the parser does not know (the recipe may be in another
+                # language): the amount cannot be checked, which is not the same as being wrong.
+                out.append(Issue(code="amount_not_verified", severity="low", refers_to=ref, lines=ing.lines,
+                                 message=f"quantity {ing.quantity:g} could not be checked: the parser does not "
+                                         f"know the words {ing.quantity_text!r}"))
+            elif parsed.value is None or abs(parsed.value - ing.quantity) > 1e-6:
                 out.append(Issue(code="quantity_mismatch", severity="high", refers_to=ref, lines=ing.lines,
                                  message=f"quantity {ing.quantity:g} does not match the words "
                                          f"{ing.quantity_text!r} (read as {parsed.value})"))
