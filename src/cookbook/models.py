@@ -60,10 +60,13 @@ class Step(BaseModel):
 
 
 class Servings(BaseModel):
-    value: int | None = Field(default=None, description="Number of servings, or null if unknown.")
+    value: int | None = Field(
+        default=None,
+        description="Number of servings. If the text does not say, your best estimate of how many people the dish "
+                    "typically serves (the user will see it as an estimate).")
     stated: bool = Field(
-        default=False, description="True only if the text says how many it serves. Otherwise false, and value is a guess.")
-    basis: str | None = Field(default=None, description="When stated is false: the reason for the guess.")
+        default=False, description="True only if the text says how many it serves. Otherwise false, and value is an estimate.")
+    basis: str | None = Field(default=None, description="When stated is false: the reasoning behind the estimate.")
     quote: str | None = Field(default=None, description="When stated is true: words copied exactly from the transcript.")
     lines: list[str] = Field(default_factory=list, description="Ids of every transcript line the quote touches.")
 

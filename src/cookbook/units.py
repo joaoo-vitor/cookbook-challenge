@@ -329,3 +329,31 @@ def to_base(value: float, unit: str) -> BaseAmount | None:
     if canonical in _COUNT_UNITS:
         return BaseAmount(value, "count", False)
     return None
+
+
+# --- helpers for other modules ----------------------------------------------------------
+fold = _fold  # lower case without accents
+to_number = _to_float  # "1 1/2" -> 1.5
+
+_COMMA_DECIMAL = {"de", "pt", "es", "fr", "it", "nl"}  # languages that write 0,5 and not 0.5
+
+
+def format_amount(value: float, language: str | None = None) -> str:
+    """Write an amount the way a recipe does: 2, 1/2, 1 1/2, or a decimal such as 0,3.
+
+    Common kitchen fractions (halves, quarters, eighths, thirds) are written as fractions.
+    The decimal separator follows the language (comma for German, Portuguese, ...).
+    """
+    from fractions import Fraction
+
+    value = round(value, 6)
+    if abs(value - round(value)) < 0.01:
+        return str(int(round(value)))
+    for denominator in (2, 3, 4, 8):  # the fractions a kitchen uses: no fifths or sevenths
+        frac = Fraction(round(value * denominator), denominator)  # reduced: 4/8 is 1/2
+        if abs(float(frac) - value) < 0.02:
+            whole, rest = divmod(frac.numerator, frac.denominator)
+            return f"{rest}/{frac.denominator}" if whole == 0 else f"{whole} {rest}/{frac.denominator}"
+    text = f"{value:.2f}".rstrip("0").rstrip(".")
+    iso = (language or "").lower().replace("_", "-").split("-")[0]
+    return text.replace(".", ",") if iso in _COMMA_DECIMAL else text
