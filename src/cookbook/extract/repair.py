@@ -36,6 +36,14 @@ def _find_lines(quote: str, tr: Transcript, anchor: list[str]) -> list[str] | No
     return None
 
 
+def _describe(cited: list[str], found: list[str]) -> str:
+    """What was wrong with a citation, in a sentence."""
+    if cited and set(cited) < set(found):  # the model cited part of the quote's lines
+        added = [i for i in found if i not in cited]
+        return f"the quote also runs onto {', '.join(added)}; the model cited only {', '.join(cited)}: corrected"
+    return f"the model cited {', '.join(cited) or 'no lines'}, but the quote is on {', '.join(found)}: corrected"
+
+
 def repair_citations(recipe: Recipe, tr: Transcript) -> tuple[Recipe, list[Issue]]:
     """A copy of the recipe with corrected line ids, and a low issue for each correction."""
     fixed = recipe.model_copy(deep=True)
@@ -53,9 +61,7 @@ def repair_citations(recipe: Recipe, tr: Transcript) -> tuple[Recipe, list[Issue
             continue  # the cited lines hold the quote: nothing to fix
         found = _find_lines(quote, tr, known)
         if found and found != item.lines:
-            issues.append(Issue(
-                code="lines_corrected", severity="low", refers_to=ref, lines=found,
-                message=f"the model cited {', '.join(item.lines) or 'no lines'}, but the quote is on "
-                        f"{', '.join(found)}: corrected"))
+            issues.append(Issue(code="lines_corrected", severity="low", refers_to=ref, lines=found,
+                                message=_describe(item.lines, found)))
             item.lines = found
     return fixed, issues

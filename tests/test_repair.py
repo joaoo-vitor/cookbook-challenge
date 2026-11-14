@@ -34,7 +34,17 @@ def test_a_quote_that_runs_on_to_the_next_line_gets_both_lines():
     assert fixed.tools[0].lines == ["p1:L3", "p1:L4"]
     [issue] = issues
     assert (issue.code, issue.severity, issue.refers_to) == ("lines_corrected", "low", "loaf_pan")
-    assert "p1:L3" in issue.message and "p1:L4" in issue.message  # what was cited, and what it is now
+    # the model cited only part of the quote's lines: the message says which line was added
+    assert issue.message == "the quote also runs onto p1:L4; the model cited only p1:L3: corrected"
+
+
+def test_the_message_for_a_quote_on_different_lines_says_where_it_is():
+    ing = Ingredient(id="i1", name="sugar", name_en="sugar", quote="brown sugar", lines=["p1:L1"])
+    _, [issue] = repair_citations(Recipe(ingredients=[ing]), _transcript())
+    assert issue.message == "the model cited p1:L1, but the quote is on p1:L5: corrected"
+    ing = Ingredient(id="i1", name="sugar", name_en="sugar", quote="brown sugar", lines=[])
+    _, [issue] = repair_citations(Recipe(ingredients=[ing]), _transcript())
+    assert "cited no lines" in issue.message
 
 
 def test_the_original_recipe_is_not_changed():
