@@ -39,14 +39,46 @@ def _note(c) -> str:
     return f" ({', '.join(notes)})" if notes else ""
 
 
+def _csv(value: str | None) -> list[str]:
+    return [m.strip() for m in value.split(",") if m.strip()] if value else []
+
+
+def _fallbacks(provider: str, args) -> list[str]:
+    """The models to switch to when a reader's own model keeps failing."""
+    from cookbook.llm import DEFAULT_FALLBACK_MODELS
+
+    if args.no_fallback:
+        return []
+    if provider == "gemini":
+        raw = args.fallback_models or os.environ.get("GEMINI_FALLBACK_MODELS")
+        return _csv(raw) if raw else list(DEFAULT_FALLBACK_MODELS)
+    return _csv(args.claude_fallback_models or os.environ.get("CLAUDE_FALLBACK_MODELS"))
+
+
+def _second_model(provider: str, args) -> str | None:
+    from cookbook.llm import DEFAULT_SECOND_MODEL
+
+    if args.second_model:
+        return args.second_model
+    if provider == "gemini":
+        return os.environ.get("GEMINI_SECOND_MODEL") or DEFAULT_SECOND_MODEL
+    return os.environ.get("CLAUDE_SECOND_MODEL")  # None: the Claude client's own default
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Transcribe a PDF with two vision models and flag differences.")
     ap.add_argument("pdf", nargs="?")
-    ap.add_argument("--provider", default="gemini", choices=["gemini"])
-    ap.add_argument("--model", help="primary model (default: GEMINI_MODEL, then a built-in name)")
-    ap.add_argument("--second-model", help="second reader (default: GEMINI_SECOND_MODEL, then a built-in name)")
+    ap.add_argument("--provider", default="gemini", choices=["gemini", "claude"],
+                    help="provider of the primary reader (claude needs the anthropic package and a key)")
+    ap.add_argument("--second-provider", default="gemini", choices=["gemini", "claude"],
+                    help="provider of the second reader; a different provider makes mistakes less likely to be shared")
+    ap.add_argument("--model", help="primary model (default: GEMINI_MODEL or CLAUDE_MODEL, then a built-in name)")
+    ap.add_argument("--second-model", help="second reader model (default: GEMINI_SECOND_MODEL or "
+                    "CLAUDE_SECOND_MODEL, then a built-in name)")
     ap.add_argument("--fallback-models", help="comma-separated models to try when a reader's own model "
                     "keeps failing (default: GEMINI_FALLBACK_MODELS, then a built-in name)")
+    ap.add_argument("--claude-fallback-models", help="comma-separated fallbacks for a Claude reader "
+                    "(default: CLAUDE_FALLBACK_MODELS, then none: the next model up costs far more)")
     ap.add_argument("--no-fallback", action="store_true", help="never switch to another model")
     ap.add_argument("--structure", action="store_true",
                     help="after reading, fill the recipe schema (ingredients, tools, steps, servings) and check it")
@@ -56,18 +88,13 @@ def main() -> int:
     ap.add_argument("--list-models", action="store_true", help="list models the key can use")
     args = ap.parse_args()
 
-    from cookbook.llm import DEFAULT_FALLBACK_MODELS, DEFAULT_SECOND_MODEL, GeminiClient
-
-    raw = args.fallback_models or os.environ.get("GEMINI_FALLBACK_MODELS")
-    fallbacks = [] if args.no_fallback else (
-        [m.strip() for m in raw.split(",") if m.strip()] if raw else list(DEFAULT_FALLBACK_MODELS))
+    from cookbook.llm import make_client
 
     try:
-        llm = GeminiClient(model=args.model, fallbacks=fallbacks)
-        second = None if args.single else GeminiClient(
-            model=args.second_model or os.environ.get("GEMINI_SECOND_MODEL") or DEFAULT_SECOND_MODEL,
-            fallbacks=fallbacks)
-    except RuntimeError as e:
+        llm = make_client(args.provider, args.model, _fallbacks(args.provider, args))
+        second = None if args.single else make_client(
+            args.second_provider, _second_model(args.second_provider, args), _fallbacks(args.second_provider, args))
+    except (RuntimeError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
 
@@ -87,7 +114,7 @@ def main() -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     stem = f"{Path(args.pdf).stem}_{_safe(llm.model)}"
-    print(f"primary: {llm.model}" + (f" | second reader: {second.model}" if second else " | single read")
+    print(f"primary: {llm.name}/{llm.model}" + (f" | second reader: {second.name}/{second.model}" if second else " | single read")
           + (f" | fallback: {', '.join(llm.fallbacks)}" if llm.fallbacks else " | no fallback"))
     for t in transcripts:
         base = out / f"{stem}_p{t.page}"

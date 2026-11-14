@@ -28,6 +28,11 @@ CACHE_DIR = Path(".cache") / "llm"  # gitignored
 DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite"
 DEFAULT_SECOND_MODEL = "gemini-3.5-flash-lite"
 DEFAULT_FALLBACK_MODELS = ("gemini-3.5-flash",)  # tried, in order, when a reader's own model keeps failing
+# Claude: the cheapest current model. Override with CLAUDE_MODEL / CLAUDE_SECOND_MODEL / CLAUDE_FALLBACK_MODELS.
+# There is no default fallback for Claude: the next model up costs 20 times more.
+DEFAULT_CLAUDE_MODEL = "claude-haiku-5-5"
+CLAUDE_TRANSCRIBE_EFFORT = "low"  # reading a page needs little reasoning, and reasoning is billed as output
+CLAUDE_STRUCTURE_EFFORT = "medium"
 
 ATTEMPTS_PER_MODEL = 3  # calls to one model before giving up on it
 BASE_DELAY = 1.0  # seconds before the first retry; doubles each time
@@ -96,7 +101,7 @@ def write_cache(cache_dir: Path, key: str, result: LLMResult) -> None:
 
 
 # --- retry and fallback ------------------------------------------------------
-RETRYABLE_CODES = {408, 429, 500, 502, 503, 504}  # timeouts, rate limits, server trouble
+RETRYABLE_CODES = {408, 429, 500, 502, 503, 504, 529}  # timeouts, rate limits, server trouble (529: overloaded)
 _NETWORK_ERROR = re.compile(r"Timeout|Connect|Read|Remote|Network|Protocol", re.I)
 
 
@@ -188,32 +193,15 @@ def load_env() -> None:
     load_dotenv()
 
 
-class GeminiClient:
-    name = "gemini"
+class _CachedProvider:
+    """What every provider shares: the disk cache, retries with backoff, and fallback models.
 
-    def __init__(self, model: str | None = None, api_key: str | None = None,
-                 cache_dir: Path = CACHE_DIR, fallbacks: tuple[str, ...] | list[str] | None = None,
-                 attempts: int = ATTEMPTS_PER_MODEL, timeout: float = REQUEST_TIMEOUT):
-        load_env()
-        key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-        if not key:
-            raise RuntimeError(
-                "No Gemini API key found. Put GEMINI_API_KEY=... in a .env file "
-                "(see .env.example) or set it in your shell.")
-        from google import genai  # imported late so offline tests do not need the SDK
-        from google.genai import types
+    A provider only says how to make one call: `_generate` (read an image) and
+    `_generate_structured` (fill a schema). Needs `name`, `model`, `fallbacks`, `attempts`,
+    `cache_dir` and `_sleep`.
+    """
 
-        # The SDK does not retry unless asked to; we retry ourselves (call_with_fallback),
-        # and we set a timeout so one call cannot hang for minutes. The SDK takes milliseconds.
-        self._client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=int(timeout * 1000)))
-        self.model = model or os.environ.get("GEMINI_MODEL") or DEFAULT_GEMINI_MODEL
-        self.fallbacks = [m for m in (fallbacks or []) if m != self.model]
-        self.attempts = attempts
-        self.cache_dir = cache_dir
-        self._sleep = time.sleep
-
-    def list_models(self) -> list[str]:
-        return [m.name for m in self._client.models.list()]
+    name: str
 
     def transcribe(self, image: bytes, prompt: str) -> LLMResult:
         """Read an image. Retries temporary errors, then falls back to other models.
@@ -251,6 +239,34 @@ class GeminiClient:
         result.failures = outcome.failures
         result.fell_back_from = self.model if outcome.model != self.model else None
         return result
+
+
+class GeminiClient(_CachedProvider):
+    name = "gemini"
+
+    def __init__(self, model: str | None = None, api_key: str | None = None,
+                 cache_dir: Path = CACHE_DIR, fallbacks: tuple[str, ...] | list[str] | None = None,
+                 attempts: int = ATTEMPTS_PER_MODEL, timeout: float = REQUEST_TIMEOUT):
+        load_env()
+        key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        if not key:
+            raise RuntimeError(
+                "No Gemini API key found. Put GEMINI_API_KEY=... in a .env file "
+                "(see .env.example) or set it in your shell.")
+        from google import genai  # imported late so offline tests do not need the SDK
+        from google.genai import types
+
+        # The SDK does not retry unless asked to; we retry ourselves (call_with_fallback),
+        # and we set a timeout so one call cannot hang for minutes. The SDK takes milliseconds.
+        self._client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=int(timeout * 1000)))
+        self.model = model or os.environ.get("GEMINI_MODEL") or DEFAULT_GEMINI_MODEL
+        self.fallbacks = [m for m in (fallbacks or []) if m != self.model]
+        self.attempts = attempts
+        self.cache_dir = cache_dir
+        self._sleep = time.sleep
+
+    def list_models(self) -> list[str]:
+        return [m.name for m in self._client.models.list()]
 
     def _generate_structured(self, model: str, text: str, prompt: str, schema: type[BaseModel]) -> LLMResult:
         from google.genai import types
@@ -290,3 +306,95 @@ class GeminiClient:
             seconds=round(time.perf_counter() - start, 2),
             thinking_tokens=getattr(usage, "thoughts_token_count", None),
         )
+
+
+# --- Claude ------------------------------------------------------------------
+def _claude_text(response, model: str) -> str:
+    """The text of a Claude answer: its text blocks, without any thinking block."""
+    text = "".join(getattr(b, "text", "") for b in response.content if getattr(b, "type", None) == "text")
+    if response.stop_reason == "max_tokens":
+        raise EmptyResponse(f"{model} was cut off at max_tokens")
+    if not text.strip():
+        raise EmptyResponse(f"{model} returned no text (stop reason: {response.stop_reason})")
+    return text
+
+
+class ClaudeClient(_CachedProvider):
+    """Claude through the official `anthropic` SDK (an optional extra: pip install -e ".[claude]").
+
+    Credentials are resolved by the SDK: ANTHROPIC_API_KEY (also read from .env), then
+    ANTHROPIC_AUTH_TOKEN, then a profile from `ant auth login`.
+    """
+
+    name = "claude"
+
+    def __init__(self, model: str | None = None, api_key: str | None = None,
+                 cache_dir: Path = CACHE_DIR, fallbacks: tuple[str, ...] | list[str] | None = None,
+                 attempts: int = ATTEMPTS_PER_MODEL, timeout: float = REQUEST_TIMEOUT):
+        load_env()
+        try:
+            import anthropic  # imported late: only needed when Claude is used
+        except ImportError as e:
+            raise RuntimeError('The Claude client needs the anthropic package: pip install -e ".[claude]"') from e
+
+        # We retry ourselves (call_with_fallback), so the SDK must not retry as well.
+        self._client = anthropic.Anthropic(api_key=api_key, max_retries=0, timeout=timeout)
+        self.model = model or os.environ.get("CLAUDE_MODEL") or DEFAULT_CLAUDE_MODEL
+        self.fallbacks = [m for m in (fallbacks or []) if m != self.model]
+        self.attempts = attempts
+        self.cache_dir = cache_dir
+        self._sleep = time.sleep
+
+    def list_models(self) -> list[str]:
+        return [m.id for m in self._client.models.list()]
+
+    def _message(self, model: str, content: list[dict], effort: str, schema=None, max_tokens: int = 8000) -> LLMResult:
+        """One Messages API call. No temperature: the current Claude models do not accept one."""
+        output_config: dict = {"effort": effort}
+        if schema is not None:
+            import anthropic
+
+            # the API needs additionalProperties: false on every object; the SDK adds it
+            output_config["format"] = {"type": "json_schema", "schema": anthropic.transform_schema(schema)}
+        start = time.perf_counter()
+        try:
+            response = self._client.messages.create(
+                model=model, max_tokens=max_tokens, output_config=output_config,
+                messages=[{"role": "user", "content": content}])
+        except TypeError as e:  # the SDK raises this when it finds no credentials at all
+            if "authentication" in str(e).lower():
+                raise RuntimeError(
+                    "No Claude credentials found. Put ANTHROPIC_API_KEY=... in a .env file "
+                    "(see .env.example) or set it in your shell.") from e
+            raise
+        usage = getattr(response, "usage", None)
+        return LLMResult(
+            text=_claude_text(response, model),
+            model=model,
+            input_tokens=getattr(usage, "input_tokens", None),
+            output_tokens=getattr(usage, "output_tokens", None),  # includes any thinking, which is billed as output
+            seconds=round(time.perf_counter() - start, 2),
+        )
+
+    def _generate(self, model: str, image: bytes, mime: str, prompt: str) -> LLMResult:
+        import base64
+
+        content = [
+            {"type": "image", "source": {"type": "base64", "media_type": mime,
+                                         "data": base64.standard_b64encode(image).decode("ascii")}},
+            {"type": "text", "text": prompt},
+        ]
+        return self._message(model, content, CLAUDE_TRANSCRIBE_EFFORT)
+
+    def _generate_structured(self, model: str, text: str, prompt: str, schema: type[BaseModel]) -> LLMResult:
+        content = [{"type": "text", "text": prompt}, {"type": "text", "text": "Transcript:\n" + text}]
+        return self._message(model, content, CLAUDE_STRUCTURE_EFFORT, schema=schema, max_tokens=16000)
+
+
+def make_client(provider: str, model: str | None = None, fallbacks=None) -> GeminiClient | ClaudeClient:
+    """The client for `provider` ("gemini" or "claude")."""
+    if provider == "gemini":
+        return GeminiClient(model=model, fallbacks=fallbacks)
+    if provider == "claude":
+        return ClaudeClient(model=model, fallbacks=fallbacks)
+    raise ValueError(f"unknown provider {provider!r}: expected 'gemini' or 'claude'")
