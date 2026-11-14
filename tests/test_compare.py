@@ -64,6 +64,7 @@ def test_a_page_number_in_only_one_read_is_ignored(primary, secondary):
 
 
 def test_a_single_word_that_moved_is_not_a_disagreement():
+    # (labels listed in a different order; "Rotwein" is a word of 7 letters, so it may count as a move)
     # drawing labels listed in a different order by the two readers
     c = _cmp("Soße wird gemacht\n[drawing] Rotwein\n[drawing] Zucker\n[drawing] Mehl",
              "Soße wird gemacht\n[drawing] Zucker\n[drawing] Mehl\n[drawing] Rotwein")
@@ -94,6 +95,85 @@ def test_the_same_fraction_written_two_ways_is_not_a_disagreement(primary, secon
 def test_different_fractions_are_still_flagged():
     c = _cmp("3/4 cup scalded milk", "½ cup scalded milk")
     assert [(f.kind, f.primary, f.secondary) for f in c.flags] == [("number", "3/4", "1/2")]
+
+
+# --- reading order: columns read row by row against column by column ------------------
+ROW_BY_ROW = (
+    "2 cups flour 1 tablespoon sugar\n"
+    "1 cup milk 1/2 teaspoon salt\n"
+    "3 large eggs 1 pinch nutmeg"
+)
+COLUMN_BY_COLUMN = (
+    "2 cups flour\n1 cup milk\n3 large eggs\n"
+    "1 tablespoon sugar\n1/2 teaspoon salt\n1 pinch nutmeg"
+)
+
+
+def test_the_same_columns_read_in_a_different_order_agree_and_are_reported_as_reordered():
+    c = _cmp(ROW_BY_ROW, COLUMN_BY_COLUMN)
+    assert c.flags == [] and c.agreement >= 0.95 and not c.unreliable
+    assert c.reordered >= 1  # never invisible
+
+
+def test_identical_reads_are_not_reordered():
+    assert _cmp(TEXT, TEXT).reordered == 0
+
+
+def test_swapped_quantities_are_still_flagged_though_the_words_are_the_same():
+    c = _cmp("1/4 teaspoon cloves and 1/2 cup milk and some salt for the pot",
+             "1/2 teaspoon cloves and 1/4 cup milk and some salt for the pot")
+    assert [f.kind for f in c.flags] == ["number", "number"]
+    assert {(f.primary, f.secondary) for f in c.flags} == {("1/4", "1/2"), ("1/2", "1/4")}
+    assert c.reordered == 0
+
+
+def test_a_quantity_moves_only_together_with_its_unit_and_noun():
+    # "1/4 teaspoon ground cloves" is at another place in the second read, but intact: a move
+    c = _cmp("1 pound ground pork\n1/4 teaspoon ground cloves\n2 eggs, beaten",
+             "2 eggs, beaten\n1 pound ground pork\n1/4 teaspoon ground cloves")
+    assert c.flags == [] and c.reordered >= 1
+    # the same text but with the number left behind: not a move
+    c = _cmp("1 pound ground pork\n1/4 teaspoon ground cloves\n2 eggs, beaten",
+             "2 eggs, beaten 1/4\n1 pound ground pork\nteaspoon ground cloves")
+    assert any(f.kind == "number" for f in c.flags)
+
+
+STEP_ONE = "Mix the flour and the sugar in a large bowl then add the eggs and whisk until smooth and pale."
+STEP_TWO = "Pour the batter into the greased pan and bake in a hot oven for twenty minutes until golden brown."
+
+
+def test_two_steps_swapped_are_not_forgiven_because_the_order_of_a_method_matters():
+    c = _cmp(f"{STEP_ONE}\n{STEP_TWO}", f"{STEP_TWO}\n{STEP_ONE}")
+    [flag] = c.flags
+    assert (flag.kind, flag.severity) == ("order", "medium")
+    assert c.agreement < 1.0 and c.reordered == 1
+
+
+@pytest.mark.parametrize("words, ok", [
+    (["rotwein"], True),
+    (["pork"], False),            # a short single word proves nothing
+    (["4"], False),               # a lone number is never a move
+    (["1/2"], False),
+    (["in", "the"], False),       # tiny words match anywhere
+    (["1/4", "cup"], True),       # a number with its unit is a block
+    (["ground", "cloves"], True),
+])
+def test_which_blocks_may_count_as_moves(words, ok):
+    from cookbook.extract.compare import _movable
+    assert _movable(words) is ok
+
+
+def test_common_words_do_not_make_unrelated_pages_look_alike():
+    a = "Zwiebeln in Scheiben schneiden und in the pot kochen with the water and the salt"
+    b = "Mehl Zucker Milch Eier verrühren and bake in the oven with the butter and the cream"
+    c = _cmp(a, b)
+    assert c.unreliable and c.agreement < 0.6
+
+
+def test_unrelated_illegible_looking_pages_stay_unreliable_even_with_a_few_shared_long_words():
+    c = _cmp("gewaschen Braten abtrocknen weiter geben Gewürz Anbraten Speck dazugeben Fleisch Brühe",
+             "zusetzen Braten oben bis dahingehen Kruste hineinstechen Speck Löffel übergießen Zwiebel")
+    assert c.unreliable
 
 
 def test_a_primary_unreadable_marker_is_a_flag_and_the_word_is_still_compared():
