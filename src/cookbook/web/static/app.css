@@ -125,6 +125,16 @@ mark.low { text-decoration-color: var(--low); background: var(--low-bg); }
 .popover input { flex: 1; min-width: 0; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
 .popover [hidden] { display: none; }
 
+.doubts { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 260px; overflow: auto; }
+.doubt { width: 100%; display: flex; gap: 10px; align-items: baseline; text-align: left; border: 1px solid var(--line); border-left-width: 4px; border-radius: 6px; padding: 6px 10px; background: var(--surface); }
+.doubt.high { border-left-color: var(--high); background: var(--high-bg); }
+.doubt.medium { border-left-color: var(--medium); background: var(--medium-bg); }
+.doubt:hover { border-color: var(--accent); }
+.doubt .where { color: var(--muted); font-size: .85rem; white-space: nowrap; }
+.doubt .what { font-size: .92rem; min-width: 0; overflow-wrap: anywhere; }
+.line.flash { animation: flash 1.6s ease-out; }
+@keyframes flash { from { background: var(--accent-soft); outline: 2px solid var(--accent); } to { background: transparent; outline-color: transparent; } }
+
 /* step 2: recipe */
 .layout2 { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
 @media (max-width: 900px) { .layout2 { grid-template-columns: 1fr; } }

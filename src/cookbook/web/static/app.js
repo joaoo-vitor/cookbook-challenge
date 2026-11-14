@@ -192,6 +192,46 @@ function doubtCount() {
   return out;
 }
 
+// every doubt on every page, most serious first, so none is found only by visiting its page
+function allDoubts() {
+  const out = [];
+  for (const id of Object.keys(S.transcript.uncertain)) {
+    for (const [i, n] of openNotes(id)) if (n.kind != null) out.push({ page: pageOf(id), id, index: i, note: n, severity: n.severity });
+  }
+  for (const p of S.pages) {
+    if (S.pageChecked[p.page]) continue;
+    for (const c of p.comparisons) {
+      if (c.unreliable) out.push({ page: p.page, severity: 'high', pageWide: true, text: `Page ${p.page} is unreliable: the two models agree on only ${pct(c.agreement)} of the words. Check every line.` });
+      else if (c.reordered) out.push({ page: p.page, severity: 'medium', pageWide: true, text: `Page ${p.page}: ${c.reordered} block(s) of words are in a different order in the two readings (columns?). Lines may mix columns.` });
+    }
+  }
+  return out.sort((a, b) => rank(a.severity) - rank(b.severity) || a.page - b.page);
+}
+
+function goToDoubt(d) {
+  S.page = d.page; render();
+  const row = d.id ? document.querySelector(`.line[data-line="${d.id}"]`) : document.querySelector('.meter');
+  if (!row) return;
+  row.scrollIntoView({ block: 'center' });
+  row.classList.add('flash');
+  setTimeout(() => row.classList.remove('flash'), 1600);
+  const mark = d.id && row.querySelector('mark, .flagbtn');
+  if (mark) mark.click();  // opens the choice of readings
+}
+
+function doubtList() {
+  const list = allDoubts();
+  if (!list.length) return h('div', { class: 'panel' }, h('h2', {}, 'Doubts'), h('p', { class: 'empty' }, 'Nothing left to check: the two models agree everywhere, or you settled every doubt.'));
+  return h('div', { class: 'panel' }, h('h2', {}, `Doubts (${list.length})`),
+    h('p', { class: 'hint' }, 'Everything the two models disagree on, in all pages. Click one to go to it.'),
+    h('ul', { class: 'doubts' }, list.map((d) => h('li', {},
+      h('button', { class: `doubt ${d.severity}`, onclick: () => goToDoubt(d) },
+        h('span', { class: `tag ${d.severity}` }, d.severity),
+        h('span', { class: 'where' }, d.id ? `page ${d.page} · ${d.id.replace(/^p\d+:/, '')}` : `page ${d.page}`),
+        h('span', { class: 'what' }, d.pageWide ? d.text
+          : d.note.primary || d.note.secondary ? `${d.note.kind}: “${d.note.primary || ''}” vs “${d.note.secondary || ''}”` : d.note.reason))))));
+}
+
 function pageMeter(info) {
   const out = [];
   for (const c of info.comparisons) {
@@ -229,8 +269,12 @@ function textStep() {
       h('div', { class: 'legend' }, legend(),
         h('span', {}, `Left to check: `, h('span', { class: 'chip high' }, `${left.high} high`), ' ', h('span', { class: 'chip medium' }, `${left.medium} medium`)),
         S.models ? h('span', {}, `Models: ${S.models.primary}` + (S.models.second ? ` and ${S.models.second}` : '')) : null)),
+    doubtList(),
     h('div', { class: 'panel' },
-      pages.length > 1 ? h('div', { class: 'pages' }, pages.map((n) => h('button', { class: n === S.page ? 'on' : '', onclick: () => { S.page = n; render(); } }, `Page ${n}`))) : null,
+      pages.length > 1 ? h('div', { class: 'pages' }, pages.map((n) => {
+        const k = allDoubts().filter((d) => d.page === n).length;
+        return h('button', { class: n === S.page ? 'on' : '', onclick: () => { S.page = n; render(); } }, `Page ${n}`, k ? h('span', { class: 'chip medium', style: 'margin-left:6px;padding:0 6px' }, k) : null);
+      })) : null,
       pageMeter(info),
       pageLevel && !S.pageChecked[info.page] ? h('div', { class: 'actions', style: 'margin:0 0 12px' },
         h('button', { class: 'btn small', onclick: () => { S.pageChecked[info.page] = true; render(); } }, 'I checked this whole page against the image')) : null,
@@ -243,7 +287,7 @@ function textStep() {
 }
 
 function lineView(id) {
-  const row = h('div', { class: 'line' });
+  const row = h('div', { class: 'line', 'data-line': id });
   fillLine(row, id);
   return row;
 }
