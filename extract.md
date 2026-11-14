@@ -1,6 +1,6 @@
 # Extract stage: working plan
 
-Status: transcription with Gemini and the two-model check are built and tested (see [README.md](README.md)). Retry with fallback is built too. A structured transcript, structuring and validation are still planned. Items marked **(unverified)** came from web searches or my own recollection and must be checked before relying on them.
+Status: transcription with Gemini and the two-model check are built and tested (see [README.md](README.md)). Retry with fallback, the schema, unit parsing, structuring and the checks are built too. A hand-checked eval and a second recipe are still to do. Items marked **(unverified)** came from web searches or my own recollection and must be checked before relying on them.
 
 ## 1. Goal
 
@@ -126,33 +126,47 @@ class VisionLLM(Protocol):
   No third model or re-read for now: flagged values are shown as not certain, and the reviewer decides.
   Observed on `Recipe.pdf` (page agreement): clean pages 0.98 and 0.99 with one flag each (one was the second model being wrong, which is still the right thing to flag); the 150 px copy 0.91 and 0.76 (unreliable); the 90 px copy 0.12 and 0.18 (unreliable).
 
-### 7.2 Structure (text to schema)
-- One call turns the transcript into the schema below.
-- Small models are worse at strict JSON, so: ask for a flat schema, parse defensively, retry once with the parse error, and rely on the validators, not on the model being right.
+### 7.2 Structure (text to schema) (built, `structure.py`)
+- One call (the primary model) turns the transcript, with its line ids, into the schema below, using Gemini's JSON schema output. The prompt forbids adding anything, requires a verbatim quote and line ids for every item, and says how to treat vague amounts, optional ingredients, implied tools and unstated servings.
+- Names and steps stay in the recipe's language; each ingredient and tool also gets a short English label for rules.
+- The answer is cached, retried and falls back to another model like the readings. If it is not valid JSON of the right shape the model is asked once more with the error, then the command stops.
+- The schema lives in `models.py` (pydantic). The transcript object (`extract/transcript.py`) joins the pages with line ids, joins line-end hyphens when a quote is looked up, and carries the uncertain lines from the two-model comparison.
 
-### 7.3 Validate (plain code)
-1. **Grounding:** each value's quote is a fuzzy substring of the transcript.
-2. **Number check:** the number parsed from the quote equals the extracted quantity (½ gives 0.5, "1/2", "1,5").
-3. **Coverage:** every number and unit in the transcript appears in some extracted field. This catches dropped quantities.
-4. **Integrity:** steps reference existing ingredients, every ingredient is used in a step, duplicates are merged or flagged.
-5. **Units:** map historic and spoken units through a table (Pfund, Loth, Schoppen, Maß, Esslöffel). Unknown units are flagged, never guessed.
-6. **Servings:** stated, or `inferred` with the reasoning shown.
-7. **Totals:** only if the recipe states them.
+### 7.3 Validate (plain code, built, `validate.py`)
+The checks never fix or drop anything. Each problem is an `Issue` with a code and a severity.
+1. **Grounding:** each item's quote must be in the transcript, on the lines it cites (at least 80% of its words, in order, ignoring case, punctuation and hyphens). Not found anywhere: `unsupported_quote` (high), possibly invented. Found on other lines: `wrong_lines` (low).
+2. **Amount check:** a quantity needs words behind it (`invented_quantity`), and the number parsed from those words (½, 1/2, 1,5, "ein halbes Pfund") must equal the quantity (`quantity_mismatch`). The unit must be known (`unknown_unit`) and match the words (`unit_mismatch`). An ingredient with no amount is fine (`no_quantity`, low): amounts are never guessed.
+3. **Coverage:** every number on a transcript line must appear in a structured field extracted from that line (amount, step text, duration, condition, servings), not only in a quote. This catches dropped quantities and durations (`uncovered_number`, high; medium on a line before the first or after the last extracted line, such as a header). A page number alone on a line is skipped.
+4. **Integrity:** steps reference ingredients and tools that exist, ids are unique, every ingredient is used in a step, the same ingredient is not listed twice, steps are numbered in order.
+5. **Servings:** missing is `servings_unknown`; a guess is `servings_inferred` with its reason shown.
+6. **Uncertainty:** an item on a line where the two readings disagreed is `uncertain_reading`; severity follows the comparison's.
+7. **Totals:** only if the recipe states them (none of the recipes seen so far do).
+
+Unit conversion (`units.py`): Pfund is 500 g, Loth about 16.7 g (approximate), Schoppen about 250 ml (approximate: a quarter to half a litre by region), spoons and cups are rough volumes (approximate), counted units (Prise, Stück, Zehe) do not convert.
+
+### 7.4 What structuring showed on `Recipe.pdf`
+One run of `gemini-3.1-flash-lite` on the transcript, after one round of prompt changes. A single recipe, so a rough signal.
+- First run: 18 ingredients, 7 steps, 1 high issue. Reading the result against the transcript found real misses the checks had not caught at first: two steps with different times ("nach dem 1. Tag oder 2. Tag", "nach 8 Tagen") were merged into one without them, and the coverage check was blind to it because it counted numbers in the model's quote. Counting only the structured fields fixed that.
+- Prompt changes (optional markers like "auch kann man", vague words into `quantity_text`, keep times and conditions, do not merge steps with different conditions) turned the optional apples, carrots and juniper berries into `optional`, recorded "einige" and "soviel", and split the merged step. Second run: 17 ingredients, 9 steps, no high issues, three medium (one uncertain reading, servings unknown, the header year).
+- **Overfitting risk:** the prompt was adjusted on this one recipe. Its wording is general, but the real test is a recipe it has not seen (build order item 13).
+- Known gaps: only one tool (the pot) and no implied ones; a mixture the recipe names ("Essigwasser", made of two listed ingredients) is not an ingredient and steps that use it list no ingredient; servings are not guessed (the model chose null). A step's `duration_text` often holds a condition instead ("nach 8 Tagen" went into `condition`).
 
 ## 8. Schema sketch (`src/cookbook/models.py`)
 
+What was built (pydantic classes in `models.py`; every item has a `quote` and the `lines` it came from):
+
 ```
-Source        page, line_ids, quote
-Value         value, origin (read | inferred | assumed), confidence, source
-Ingredient    id, name, quantity (null if none), unit, prep_note, optional, + source/origin
-Tool          id, name, origin (stated | implied), source
-Step          n, text, ingredient_ids, tool_ids, duration, condition, source
-Servings      value, origin (stated | inferred), basis
-Recipe        servings, ingredients, tools, steps, flags
-Flag          code, severity, message, refers_to
+Ingredient    id, name, name_en, quantity, quantity_text, unit, prep_note, optional, quote, lines
+Tool          id, name, name_en, implied, quote, lines
+Step          n, text, ingredient_ids, tool_ids, duration_text, condition, quote, lines
+Servings      value, stated, basis, quote, lines
+Recipe        title, language, servings, ingredients, tools, steps
+Issue         code, severity (high | medium | low), message, refers_to, lines     (the checks produce these)
 ```
 
-Rules: an unquantified ingredient has `quantity = null`, never a made-up number. Guesses go in a separate field with `origin = assumed`.
+The first sketch had a per-value `origin` and `confidence`. That was simplified: whether something was read or guessed is `stated` (servings) and `implied` (tools); an amount is either read (`quantity_text` holds its words) or `None`, never invented; and uncertainty is an `Issue` found by the checks, not a number the model reports.
+
+Rules: an unquantified ingredient has `quantity = null`, never a made-up number. A guess is marked (`stated = false` with a `basis`).
 
 ## 9. Small-model risks
 
@@ -170,21 +184,21 @@ Rules: an unquantified ingredient has `quantity = null`, never a made-up number.
 4. [x] Send smaller JPEG images (a fixed 200 dpi render was the cause of slow calls)
 5. [x] Retry with backoff and a fallback model in `llm.py`
 6. [x] Two-model read: compare, flag differing words and numbers, page agreement score (section 7.1)
-7. [ ] A structured transcript: lines with ids, the source of each line, the model, the flags; join line-end hyphens
-8. [ ] `models.py`: schema and flag types
-9. [ ] `units.py`: parse quantities (fractions, decimals with comma) and map units, with tests
-10. [ ] `validate.py`: the seven checks, with tests using hand-written transcripts that contain planted errors (a dropped quantity, a changed number, an invented ingredient)
-11. [ ] `structure.py`
+7. [x] A transcript object: all pages with line ids and the uncertain lines (`extract/transcript.py`). Line-end hyphens are joined when quotes are looked up; the transcript itself keeps the written lines
+8. [x] `models.py`: schema and issue type
+9. [x] `units.py`: parse quantities (fractions, decimals with comma, number words, ranges, vague amounts) and convert units, with tests
+10. [x] `validate.py`: the checks, with tests using a made-up recipe and planted errors (a dropped quantity, a changed number, an invented ingredient, ...)
+11. [x] `structure.py`: the model call, retry on invalid JSON, then the checks
 12. [ ] A small eval: a few lines transcribed by hand (kept out of git if copied from the recipe), scored on number accuracy and unsupported-value rate
-13. [ ] A second recipe, in a different format or language, and image and plain-text input in ingest
-
-Items 8 to 10 need no model and no network.
+13. [ ] A second recipe, in a different format or language, and image and plain-text input in ingest, to test the prompt on something it was not tuned on
+14. [ ] Derived ingredients (a named mixture like "Essigwasser") and implied tools, which the rules for vegan and scaling will need
 
 ## 11. Open questions
 
 - Is a second reader from a different model family available and good enough? Both current readers are Gemini, so shared mistakes would go unflagged. Gemma returned a 503 and other providers are untested for handwriting.
 - Is 0.85 the right page agreement threshold? It needs more pages and a harder, more realistic set than synthetic degradation.
-- How strict is the coverage check? Numbers only, or also units and ingredient words?
+- How strict is the coverage check? It covers numbers only. Words are not checked: an ingredient the model never lists is only caught if its line has a number.
+- Should the structuring be read twice by two models, like the transcript? We chose one call plus the checks; revisit if the second recipe shows misses the checks cannot see.
 - Where does the hand-transcribed eval text live, so no page content is committed?
 
 ## Sources

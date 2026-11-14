@@ -8,11 +8,11 @@ Built for the finlyt engineering case study. Stages: **ingest, extract, manipula
 | Stage | What it does | Status | Guide |
 |---|---|---|---|
 | Ingest | Decides, per PDF page, how to read it (text layer, OCR layer, or vision model) | Built (PDF only) | [ingest.md](ingest.md) |
-| Extract | Transcribes pages with two vision models and flags where they disagree; structuring and validation come next | Two-model transcription built, rest planned | [extract.md](extract.md) |
+| Extract | Transcribes pages with two vision models and flags where they disagree, fills a structured recipe (ingredients, tools, steps, servings) and checks it | Built | [extract.md](extract.md) |
 | Manipulate | Change servings, make vegan | Not started | |
 | Output | Step-by-step recipe, changes against the original | Not started | |
 
-Not built yet: images and plain-text input, structured extraction, validators, the rules engine, the output renderers, `examples/` and `AI_LOG.md`.
+Not built yet: images and plain-text input, the rules engine (servings, vegan), the output renderers, `examples/` and `AI_LOG.md`.
 
 ## Setup
 
@@ -129,6 +129,33 @@ Things to know:
 - **Retries and fallback:** a temporary error (a 503 "high demand", a 429 rate limit, a timeout) is retried up to 3 times per model, waiting about 1, 2, then 4 seconds. If the model still fails, or is not available to your key (a 404), the next fallback model is tried. Errors that retrying cannot fix (a bad key, a bad request) stop at once. Each request times out after 90 seconds. The summary shows when a call needed retries or a fallback, with the errors in `usage.json`.
 - **Fallback and the comparison:** a fallback answer is cached under the model that gave it. If both readers end up on the same model, the comparison is skipped with a warning, because two readings from one model are not independent.
 
+**Structuring.** Add `--structure` to also turn the transcript into a structured recipe and check it:
+
+```powershell
+python -m cookbook.extract Recipe.pdf --pages 1,2 --structure
+```
+
+One more model call (the primary model) fills the schema in [src/cookbook/models.py](src/cookbook/models.py): title, language, servings, ingredients (name, amount, unit, preparation note, optional), tools (named or implied) and steps (with the ingredients, tools, durations and conditions each uses). Names and steps stay in the recipe's own language, and each ingredient and tool also gets a short English label for rules like "make it vegan".
+
+The model is not trusted. Every item must carry a quote copied from the transcript and the ids of the lines it came from, and plain code ([validate.py](src/cookbook/extract/validate.py)) checks the result. It never fixes or drops anything: each problem becomes an issue with a severity.
+
+| Issue | Meaning |
+|---|---|
+| `unsupported_quote` (high) | the quote is not in the transcript: possibly invented |
+| `invented_quantity`, `quantity_mismatch`, `unit_mismatch` (high) | an amount with no words behind it, or that does not match its words or unit |
+| `uncovered_number` (high) | the transcript has a number that nothing extracted from that line contains: a dropped quantity or duration (medium if the line is outside the extracted text, such as a header) |
+| `unknown_reference`, `duplicate_id` (high) | a step uses an ingredient or tool that is not in the list |
+| `uncertain_reading` (high or medium) | the value sits on a line where the two readings disagreed |
+| `unused_ingredient`, `duplicate_ingredient`, `unknown_unit`, `servings_unknown`, `servings_inferred` (medium) | for example servings the recipe never states are not guessed silently |
+| `no_quantity`, `wrong_lines`, `step_order` (low) | the source gives no amount (it is never guessed), and similar notes |
+
+It writes three more files per run, named `<pdf name>_<primary model>`:
+- `.transcript.txt`: all pages joined, one written line per row with its id.
+- `.recipe.json`: the structured recipe.
+- `.issues.json`: every issue, most serious first.
+
+The summary lists the high and medium issues. If the model's answer is not valid JSON of the right shape it is asked once more with the error; after that the command stops with an error.
+
 You can also call it from Python:
 
 ```python
@@ -166,7 +193,11 @@ Open the folder in VS Code and pick the `.venv` interpreter (Ctrl+Shift+P, "Pyth
 ```
 src/cookbook/
   ingest/        decide how to read each page (pdf.py, CLI in __main__.py)
-  extract/       transcribe pages with two vision models (transcribe.py), compare the readings (compare.py), CLI in __main__.py
+  models.py      the structured recipe (ingredients, tools, steps, servings) and the issue type
+  units.py       parse amounts ("1/2", "ein Pfund", "einige") and convert units (Pfund, Loth, l, ...)
+  extract/       transcribe.py (two vision models), compare.py (compare the readings), transcript.py (all pages
+                 with line ids and uncertainty), structure.py (fill the schema), validate.py (the checks),
+                 CLI in __main__.py
   llm.py         the only module that talks to a model provider (Gemini client, cache)
 tests/           offline tests
 evals/           scripts for comparing models on degraded scans
