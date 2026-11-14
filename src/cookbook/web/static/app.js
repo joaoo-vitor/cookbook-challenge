@@ -20,6 +20,7 @@ const S = {
   page: 1,
   sent: null,            // the transcript the recipe was built from
   recipe: null, issues: [], recipeDirty: false,
+  checkedIssues: new Set(), // issues the person marked as checked (hidden until they reset the warnings)
   busy: null,            // text shown over a panel while the server works
   manip: null, scaleOn: true, servings: '', base: '',
 };
@@ -145,7 +146,7 @@ function loadingView() {
 function loaded(result) {
   S.transcript = result.transcript; S.pages = result.pages; S.models = result.models;
   S.text = clone(result.transcript.lines); S.resolved = {}; S.reviewed = new Set(); S.pageChecked = {};
-  S.recipe = null; S.issues = []; S.manip = null; S.recipeDirty = false; S.sent = null;
+  S.recipe = null; S.issues = []; S.manip = null; S.recipeDirty = false; S.sent = null; S.checkedIssues = new Set();
   S.page = 1; S.step = 1; S.maxStep = 1; S.screen = 'steps'; S.busy = null;
   render();
 }
@@ -219,11 +220,28 @@ function goToDoubt(d) {
   if (mark) mark.click();  // opens the choice of readings
 }
 
+function keepScroll(fn) { const keep = window.scrollY; fn(); render(); window.scrollTo(0, keep); }
+
+// bring every warning back (the text the person edited stays as it is)
+function resetTextWarnings() {
+  keepScroll(() => { S.reviewed = new Set(); S.resolved = {}; S.pageChecked = {}; });
+}
+
+const hasTextWarnings = () => S.reviewed.size > 0 || Object.keys(S.resolved).length > 0 || Object.keys(S.pageChecked).length > 0;
+
+function resetButton(onclick, disabled) {
+  return h('button', { class: 'btn small', onclick, disabled, title: 'Show the warnings you checked again, so you can check them again' }, 'Reset warnings');
+}
+
 function doubtList() {
   const list = allDoubts();
-  if (!list.length) return h('div', { class: 'panel' }, h('h2', {}, 'Doubts'), h('p', { class: 'empty' }, 'Nothing left to check: the two models agree everywhere, or you settled every doubt.'));
+  const reset = resetButton(resetTextWarnings, !hasTextWarnings());
+  if (!list.length) return h('div', { class: 'panel' }, h('h2', {}, 'Doubts'),
+    h('p', { class: 'empty' }, 'Nothing left to check: the two models agree everywhere, or you checked every doubt.'),
+    h('div', { class: 'actions', style: 'margin-top:8px' }, reset));
   return h('div', { class: 'panel' }, h('h2', {}, `Doubts (${list.length})`),
-    h('p', { class: 'hint' }, 'Everything the two models disagree on, in all pages. Click one to go to it.'),
+    h('p', { class: 'hint' }, 'Everything the two models disagree on, in all pages. Click one to go to it. A warning goes away when you check its line (✓) or fix it.'),
+    h('div', { class: 'actions', style: 'margin:0 0 10px' }, reset),
     h('ul', { class: 'doubts' }, list.map((d) => h('li', {},
       h('button', { class: `doubt ${d.severity}`, onclick: () => goToDoubt(d) },
         h('span', { class: `tag ${d.severity}` }, d.severity),
@@ -329,6 +347,11 @@ function fillLine(row, id) {
   if (checked) body.append(h('span', { class: 'ok' }, '✓ checked'));
   body.addEventListener('click', () => editLine(row, id));
   row.append(body);
+  if (open.length) {  // a line that still has a warning: one click says "I checked it, it is right"
+    row.append(h('button', { class: 'btn small checkbtn', title: 'I checked this line against the page: it is right',
+                             onclick: (e) => { e.stopPropagation(); keepScroll(() => S.reviewed.add(id)); } }, '✓ Check'));
+    row.classList.add('hasbtn');
+  }
 }
 
 function editLine(row, id) {
@@ -423,6 +446,7 @@ async function confirmText() {
     const t = buildTranscript();
     const res = await postJson('/api/structure', { transcript: t, edits: {} });
     S.sent = res.transcript; S.recipe = res.recipe; S.issues = res.issues; S.recipeDirty = false; S.manip = null;
+    S.checkedIssues = new Set();
     S.maxStep = Math.max(S.maxStep, 2); S.step = 2;
     S.servings = ''; S.base = '';
   } catch (e) { S.error = e.message; }
@@ -430,10 +454,21 @@ async function confirmText() {
 }
 
 // ---------------------------------------------------------------- step 2: the recipe
+const issueKey = (i) => `${i.code}|${i.refers_to || ''}|${i.message}`;
+const visibleIssues = () => S.issues.filter((i) => !S.checkedIssues.has(issueKey(i)));
+
 function issuesByRef() {
   const map = {};
-  for (const i of S.issues) (map[i.refers_to || ''] = map[i.refers_to || ''] || []).push(i);
+  for (const i of visibleIssues()) (map[i.refers_to || ''] = map[i.refers_to || ''] || []).push(i);
   return map;
+}
+
+function checkIssue(i) { keepScroll(() => S.checkedIssues.add(issueKey(i))); }
+function resetIssues() { keepScroll(() => { S.checkedIssues = new Set(); }); }
+
+function checkButton(i) {
+  return h('button', { class: 'btn small', style: "margin-left:8px", title: 'I checked this: it is right',
+                       onclick: (e) => { e.stopPropagation(); checkIssue(i); } }, '✓ Check');
 }
 
 function worstOf(list) { return (list || []).reduce((w, i) => (w == null || rank(i.severity) < rank(w) ? i.severity : w), null); }
@@ -441,7 +476,7 @@ function worstOf(list) { return (list || []).reduce((w, i) => (w == null || rank
 function itemBox(ref, issues, ...content) {
   const list = issues[ref] || [];
   return h('div', { class: `item ${worstOf(list) || ''}` }, content,
-    list.length ? h('ul', { class: 'msgs' }, list.map((i) => h('li', {}, h('span', { class: `tag ${i.severity}` }, i.severity), ' ', i.message))) : null);
+    list.length ? h('ul', { class: 'msgs' }, list.map((i) => h('li', {}, h('span', { class: `tag ${i.severity}` }, i.severity), ' ', i.message, checkButton(i)))) : null);
 }
 
 const quoteLine = (x) => h('div', { class: 'quote' }, x.quote ? ['“', h('code', {}, x.quote), '” '] : 'no quote ', x.lines && x.lines.length ? `(${x.lines.join(', ')})` : '');
@@ -449,7 +484,9 @@ const quoteLine = (x) => h('div', { class: 'quote' }, x.quote ? ['“', h('code'
 function recipeStep() {
   if (S.busy) return busyView(S.busy);
   const r = S.recipe, issues = issuesByRef();
-  const counts = Object.fromEntries(SEVERITIES.map((s) => [s, S.issues.filter((i) => i.severity === s).length]));
+  const shown = visibleIssues();
+  const hidden = S.issues.length - shown.length;
+  const counts = Object.fromEntries(SEVERITIES.map((s) => [s, shown.filter((i) => i.severity === s).length]));
 
   const ingredient = (ing) => itemBox(ing.id, issues,
     h('div', { class: 'fields' },
@@ -484,8 +521,11 @@ function recipeStep() {
   const side = h('aside', { class: 'panel sidepanel' }, h('h2', {}, 'Doubts'),
     h('p', { class: 'hint' }, 'Found by plain code checking the recipe against the text, not by a model.'),
     h('div', { style: 'margin-bottom:10px' }, SEVERITIES.map((s) => h('span', { class: `chip ${s}`, style: 'margin-right:6px' }, `${counts[s]} ${s}`))),
-    S.issues.length ? S.issues.map((i) => h('div', { class: `issue ${i.severity}` }, h('b', {}, `${i.severity} · ${i.code}${i.refers_to ? ' · ' + i.refers_to : ''}`), i.message))
-      : h('p', { class: 'empty' }, 'Nothing to check.'));
+    h('div', { class: 'actions', style: 'margin:0 0 10px' }, resetButton(resetIssues, hidden === 0),
+      hidden ? h('span', { class: 'hint', style: 'margin:0' }, `${hidden} checked`) : null),
+    shown.length ? shown.map((i) => h('div', { class: `issue ${i.severity}` }, h('b', {}, `${i.severity} · ${i.code}${i.refers_to ? ' · ' + i.refers_to : ''}`), i.message,
+      h('div', { style: 'margin-top:4px' }, checkButton(i))))
+      : h('p', { class: 'empty' }, S.issues.length ? 'Everything is checked.' : 'Nothing to check.'));
 
   return h('div', {},
     h('div', { class: 'panel' }, h('h2', {}, r.title || 'The recipe'),

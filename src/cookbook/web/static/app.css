@@ -105,6 +105,8 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; }
 .lines { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: .92rem; }
 .line { display: grid; grid-template-columns: 4.2em 1fr; gap: 8px; padding: 2px 6px; border-left: 3px solid transparent; border-radius: 4px; }
 .line:hover { background: var(--bg); }
+.line.hasbtn { grid-template-columns: 4.2em 1fr auto; }
+.checkbtn { align-self: start; font-family: system-ui, sans-serif; }
 .line .id { color: var(--muted); font-size: .78rem; padding-top: 3px; user-select: none; }
 .line .body { white-space: pre-wrap; word-break: break-word; min-height: 1.5em; cursor: text; }
 .line.checked { border-left-color: var(--ok); }

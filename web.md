@@ -27,6 +27,14 @@ Only reading is a job, because two models per page take seconds. Jobs and upload
 2. **Check the recipe.** Every ingredient, tool and step is editable and shows the quote and lines it came from. Items with issues are coloured by the worst severity and list the messages; a side panel lists all issues. *Re-check* runs the same checks on your edits, so a wrong amount is caught again. Servings that are only the model's estimate are labelled as such.
 3. **Change the recipe.** Choose the servings (and, if you know it, what the recipe makes now). The order of manipulations is shown but fixed: rules run in one order whatever you ask, and a substitution keeps its ingredient's scaling class, so the result is the same either way. The result shows original and new side by side, then a log of what changed, what was left alone and what to check by hand. The vegan option is shown disabled until that rule exists.
 
+## Checking warnings off
+
+In both steps a warning goes away when the person says they checked it, and *Reset warnings* brings them all back so they can be checked again.
+- **Text step:** a line with a doubt has a **✓ Check** button (editing or confirming the line, or choosing a reading, does the same). *Reset warnings* restores every doubt; the text the person edited stays as edited.
+- **Recipe step:** each issue, in the side panel and under its item, has a **✓ Check** button. Checked issues are hidden and counted ("3 checked"). They are remembered by code, item and message, so *Re-check* does not bring back one that is still the same. Building the recipe again from the text starts clean.
+
+Checking a warning only hides it on the page: the recipe and its issues are unchanged, and nothing is sent to the server.
+
 ## Safety and limits
 
 Text from a model is only ever put on the page as text, never as HTML. Uploads are saved under a generated name, never the one the browser sent. A file that is not a PDF, an image or text is refused, as is one over 20 MB. The page opens without an API key; the error appears when a model is first needed. Reading shows stages, not per-page progress, because `transcribe_pdf` returns when all pages are done.
