@@ -5,8 +5,9 @@ requires-python = ">=3.10"
 dependencies = ["pymupdf>=1.24", "google-genai>=1.0", "python-dotenv>=1.0", "pydantic>=2.0"]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "httpx"]  # httpx: the web tests call the app in-process
 claude = ["anthropic>=0.60"]  # only needed when a reader uses Claude
+web = ["fastapi>=0.110", "uvicorn>=0.29", "python-multipart>=0.0.9"]  # the local web page
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -14,6 +15,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"cookbook.web" = ["static/*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

@@ -83,6 +83,15 @@ def structure_recipe(transcript: Transcript, llm: TextLLM, retries: int = 1) -> 
                 raise StructureError(f"the model's answer is not a valid recipe: {str(err)[:300]}") from err
             prompt = (PROMPT + f"\n\nYour previous answer was not valid: {str(err)[:400]}\n"
                       "Answer again with corrected JSON only.")
+    recipe, issues = check_recipe(recipe, transcript)
+    return Structured(recipe, issues, calls)
+
+
+def check_recipe(recipe: Recipe, transcript: Transcript) -> tuple[Recipe, list[Issue]]:
+    """Tidy the citations of a recipe and check it against the transcript. No model is called.
+
+    Used after the model fills the schema and again when a person has edited the recipe.
+    """
     recipe, cleaned = clean_quotes(recipe)  # line ids the model copied into a quote are not recipe words
     recipe, corrections = repair_citations(recipe, transcript)  # fix pointers, never the content
-    return Structured(recipe, sort_issues(validate(recipe, transcript) + cleaned + corrections), calls)
+    return recipe, sort_issues(validate(recipe, transcript) + cleaned + corrections)
