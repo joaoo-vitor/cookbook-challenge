@@ -9,10 +9,11 @@ Built for the finlyt engineering case study. Stages: **ingest, extract, manipula
 |---|---|---|---|
 | Ingest | Decides, per PDF page, how to read it (text layer, OCR layer, or vision model) | Built (PDF only) | [ingest.md](ingest.md) |
 | Extract | Transcribes pages with two vision models and flags where they disagree, fills a structured recipe (ingredients, tools, steps, servings) and checks it | Built | [extract.md](extract.md) |
-| Manipulate | Change servings, make vegan | Not started | |
+| Manipulate | Change servings (built); make vegan (not started) | Partly built | |
+| Web page | Upload, check the text, check the recipe, change it | Built (vegan toggle disabled) | [web.md](web.md) |
 | Output | Step-by-step recipe, changes against the original | Not started | |
 
-Not built yet: the rules engine (servings, vegan), the output renderers, `examples/` and `AI_LOG.md`.
+Not built yet: the vegan rule, the output renderers, `examples/` and `AI_LOG.md`.
 
 ## Setup
 
@@ -21,7 +22,7 @@ You need Python 3.10 or newer. From the project folder:
 ```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
-pip install -e ".[dev]"
+pip install -e ".[dev,web]"
 ```
 
 On macOS or Linux, activate with `source .venv/bin/activate` instead. Activate the environment again in every new terminal.
@@ -192,6 +193,24 @@ for c in pages[0].comparisons:
     print(c.label, c.agreement, c.unreliable, c.flags)
 ```
 
+### Manipulate (servings)
+
+Takes the `.recipe.json` that extract wrote and changes the number of servings:
+
+```powershell
+python -m cookbook.manipulate data/my_tests/pancakes_gemini-3.1-flash-lite.recipe.json --servings 6
+```
+
+It writes `<name>.servings6.recipe.json` and `<name>.servings6.changes.json` next to the recipe, and prints what changed, what was left alone and why, and what to check by hand. If the recipe does not state its servings, the base is the model's estimate (flagged in the output); give the real number with `--base-servings 4`. Amounts scale by the kind of ingredient (seasonings grow more slowly than the rest, and vague amounts such as "a little" are kept), are rounded to values a kitchen uses, and the amounts written inside the steps are updated too.
+
+### The web page
+
+```powershell
+python -m cookbook.web
+```
+
+Opens http://127.0.0.1:8000 (this computer only). Drop a PDF, an image or a text file; the two models read it; then three steps: check the text (words the models read differently are underlined, click one to choose a reading or type your own), check the recipe (each value with its quote, and the doubts the checks found, coloured by severity), and change the servings (with the log of what was done and why). It needs the same `.env` key as the command line and the `web` extra from Setup. See [web.md](web.md) for how it works.
+
 ## Try it on your own recipes
 
 Any PDF works: put it anywhere and pass its path (in quotes if the path has spaces). Keep the results inside `data/`, which is gitignored, so a recipe from a book never ends up in git:
@@ -260,10 +279,14 @@ src/cookbook/
   extract/       transcribe.py (two vision models), compare.py (compare the readings), transcript.py (all pages
                  with line ids and uncertainty), structure.py (fill the schema), validate.py (the checks),
                  CLI in __main__.py
+  manipulate/    scaling.py (the servings rule), engine.py (rules in a fixed order), changes.py (the log),
+                 CLI in __main__.py
+  web/           app.py (routes), jobs.py (reading runs as a job), static/ (the page: plain HTML, CSS, JS)
   llm.py         the only module that talks to a model provider (Gemini client, cache)
 tests/           offline tests
 evals/           scripts for comparing models on degraded scans
 ingest.md        how the ingest stage works, step by step
 extract.md       plan and decisions for the extract stage
+web.md           how the web page works
 .env.example     template for the API key
 ```
