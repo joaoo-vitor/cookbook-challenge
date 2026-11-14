@@ -81,7 +81,8 @@ Reads every page and writes a transcript. Typed pages use their text layer and n
 
 **Two readers.** By default two different models read the same image at the same time. The first model's reading is the transcript. Plain code then compares the two readings word by word:
 - Every place where they differ is a **flag**: that word or number is not certain. A difference in a number or fraction is high severity, any other word is medium.
-- Differences that are not content are ignored: line-end hyphens, spacing and dash characters, punctuation, a drawing label listed in a different order, and a page number that only one reading has.
+- Differences that are not content are ignored: line-end hyphens, spacing and dash characters, punctuation, the same fraction written two ways (`¾` and `3/4`), a drawing label listed in a different order, and a page number that only one reading has.
+- Known limit: when the two models read a multi-column page in a different order, whole lines move and the comparison reports them as disagreements (a planned change makes it tolerant of short moved blocks). Check the `.second.txt` file when a page has columns.
 - The **agreement** (word similarity of the two readings, 0 to 1) is reported for each page. Below 0.85 the page is marked **UNRELIABLE**, because on an illegible page each model invents different text.
 - If the second reader fails (for example a 503), you still get the first reading, with a warning and no comparison.
 - Both readers are Gemini models, so a mistake they share is not flagged. Agreement does not prove a reading is right.
@@ -126,6 +127,7 @@ page 1 [vision, vision] -> data\experiments\Recipe_gemini-3.1-flash-lite_p1.txt
 Things to know:
 - **Sending data:** this uploads images of your pages to Google. Free-tier prompts may be used for training in some regions, so do not send documents you must keep private.
 - **Cache:** answers are cached in `.cache/llm/`, keyed on provider, model, prompt and image. Running the same page again costs nothing. Delete the folder to force new calls.
+- **Empty answers:** a model that answers with no text (blocked or cut off) counts as a failed call: it is retried, falls back to another model, and is never cached or compared as if it were a reading.
 - **Retries and fallback:** a temporary error (a 503 "high demand", a 429 rate limit, a timeout) is retried up to 3 times per model, waiting about 1, 2, then 4 seconds. If the model still fails, or is not available to your key (a 404), the next fallback model is tried. Errors that retrying cannot fix (a bad key, a bad request) stop at once. Each request times out after 90 seconds. The summary shows when a call needed retries or a fallback, with the errors in `usage.json`.
 - **Fallback and the comparison:** a fallback answer is cached under the model that gave it. If both readers end up on the same model, the comparison is skipped with a warning, because two readings from one model are not independent.
 
@@ -147,7 +149,7 @@ The model is not trusted. Every item must carry a quote copied from the transcri
 | `unknown_reference`, `duplicate_id` (high) | a step uses an ingredient or tool that is not in the list |
 | `uncertain_reading` (high or medium) | the value sits on a line where the two readings disagreed |
 | `unused_ingredient`, `duplicate_ingredient`, `unknown_unit`, `servings_unknown`, `servings_inferred` (medium) | for example servings the recipe never states are not guessed silently |
-| `no_quantity`, `wrong_lines`, `step_order` (low) | the source gives no amount (it is never guessed), and similar notes |
+| `no_quantity`, `lines_corrected`, `wrong_lines`, `step_order` (low) | the source gives no amount (it is never guessed); the model cited the wrong line numbers for a quote that is in the transcript, and they were corrected; and similar notes |
 
 It writes three more files per run, named `<pdf name>_<primary model>`:
 - `.transcript.txt`: all pages joined, one written line per row with its id.
