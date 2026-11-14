@@ -92,6 +92,8 @@ All numbers come from two pages of one recipe, so they are a rough signal, not a
 - **Hidden thinking tokens:** `gemini-3.5-flash` used roughly 1,650 to 3,400 thinking tokens per page against 130 to 300 visible tokens, with little accuracy gain, so we do not use it.
 - **Image size was the main cause of slow calls.** Sending a 41 MB PNG (a fixed 200 dpi render) took 15 to 75 s per page. A JPEG of about 1 MB takes 3 to 6 s with the same transcript quality.
 - **Reliability:** repeated 503 "high demand" errors on `gemini-3.5-flash` and Gemma. The client needs retry with backoff and a fallback model.
+- **Columns (a two-column ingredient list, an old English recipe):** with the first prompt the two readers read the same words in a different order. `gemini-3.1-flash-lite` read row by row across the columns, so each line mixed two ingredients, while `gemini-3.5-flash-lite` read column by column. Ignoring order the readings shared 96% of their words, but the comparison is order-sensitive, so it gave 0.83 agreement, marked the page unreliable and produced 22 high issues. After adding the column rule to the prompt (one column completely before the next) both readers read column by column, agreement was 1.00, and the structured recipe had all 10 ingredients with correct amounts; the issues fell to 2 high, 1 medium. The prompt rule worked for this image; it is not a guarantee, because a model may still ignore it. Still open: the comparison itself is order-sensitive, and layout is not detected in the image.
+- **Remaining issues on that recipe, both from the checks and not the reading:** a quote that contained a hyphenated line break ("pre-" and "pared") was reported unsupported, and a package size inside a unit ("1 9-ounce can") is an unknown unit and leaves the "9" uncovered.
 
 ## 6. Provider interface (`src/cookbook/llm.py`)
 
@@ -113,7 +115,7 @@ class VisionLLM(Protocol):
 ## 7. Pipeline
 
 ### 7.1 Transcribe (vision, only for `VISION` pages and image tasks)
-- Prompt: transcribe exactly, one line per output line, keep old spelling, write `[?word?]` for anything unreadable, do not interpret, do not fix. (Built.)
+- Prompt: transcribe exactly, one line per output line, keep old spelling, write `[?word?]` for anything unreadable, do not interpret, do not fix, and write one column completely before the next (never two columns on one line). (Built.)
 - Output: one transcript with line ids (`p1:L1`, ...), pages joined so a sentence crossing a page break stays whole. Hyphenated line ends (like "Bra-tenstücke") are joined by plain code, and the join is recorded. (Line ids exist in the CLI output; the joined, structured transcript is to do.)
 - Digital pages (`TEXT_*`) skip this and use the text layer. Image tasks use `merge_page_text`. (Built.)
 - **Two reads (built, `compare.py`).** Each page is read by two different models (primary `gemini-3.1-flash-lite`, second `gemini-3.5-flash-lite`), in parallel. The primary reading is the transcript. Then plain code compares the two:
