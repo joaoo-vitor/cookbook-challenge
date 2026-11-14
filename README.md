@@ -172,6 +172,46 @@ for c in pages[0].comparisons:
     print(c.label, c.agreement, c.unreliable, c.flags)
 ```
 
+## Try it on your own recipes
+
+Any PDF works: put it anywhere and pass its path (in quotes if the path has spaces). Keep the results inside `data/`, which is gitignored, so a recipe from a book never ends up in git:
+
+```powershell
+python -m cookbook.ingest "C:\path\to\my recipe.pdf"
+python -m cookbook.extract "C:\path\to\my recipe.pdf" --structure --out data/my_tests
+```
+
+What to expect:
+- **Supported:** PDFs that are scanned or photographed, typed, or a mix, in any language. Images and plain-text files are not supported yet.
+- **One recipe per PDF.** The schema holds a single recipe, so a PDF with a whole cookbook would be merged into one wrong recipe. Pick the pages of one recipe with `--pages`, for example `--pages 12,13`.
+- **Calls and time.** A typed page needs no reading call, so only the structuring call is made (about 4 seconds). A scanned page is read by two models, then one structuring call is made (about 10 seconds for two pages). Results are cached, so running the same command again is free and gives the same answer. Delete `.cache/llm/` to start over.
+- **Privacy.** Scanned pages (as images) and the transcript text are sent to Google. Do not use documents you must keep private.
+
+How to check a result. Open the files written to the `--out` folder (named after the PDF and the primary model) in this order:
+1. **The console summary.** For each scanned page it shows the agreement of the two readings and `UNRELIABLE` if they mostly disagree (a blurry or illegible page). Each flag is a word or number the two models read differently.
+2. **`.transcript.txt`.** Read it against the page. Everything after this depends on it, and it is the one place the checks cannot verify, because they compare the recipe to the transcript, not to the page.
+3. **`.recipe.json`.** Compare it with the page: amounts and units, which ingredients are optional, the order and separation of the steps, the tools, the servings. Each item has a `quote` and the `lines` it came from, so you can find its words in the transcript.
+4. **`.issues.json`.** The problems the checks found, most serious first. `refers_to` is the ingredient ("i3"), tool, step or transcript line, and `lines` says where to look. See the table under Extract for what each code means.
+
+What the checks cannot see, so look for it yourself: an ingredient the model never listed (only numbers are checked), a wrongly optional or non-optional ingredient, two steps merged into one, tools that are missing, and servings that are guessed.
+
+Example for a typed one-page recipe (a made-up pancake recipe):
+
+```
+page 1 [text_digital, text_layer] -> data\my_tests\pancakes_gemini-3.1-flash-lite_p1.txt
+
+structured recipe -> data\my_tests\pancakes_gemini-3.1-flash-lite.recipe.json
+  structuring tokens in/out/thinking: 893/1677/None, 3.58s
+  9 ingredients, 4 tools, 5 steps; servings: 4 (stated)
+  issues: 0 high, 0 medium, 1 low -> data\my_tests\pancakes_gemini-3.1-flash-lite.issues.json
+```
+
+If something goes wrong:
+- `error: No Gemini API key found`: create `.env` as described under Setup.
+- A 404 for a model: its name was retired. Run `python -m cookbook.extract --list-models` and set `GEMINI_MODEL` in `.env`.
+- A 503: the command retries and may switch to a fallback model by itself; the summary says when it did.
+- `error: the model's answer is not a valid recipe`: the model returned something that was not valid twice in a row. Run the command again.
+
 ## Tests
 
 ```powershell
