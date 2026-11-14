@@ -44,7 +44,9 @@ _ALIASES = {
     "tasse": "tasse", "cup": "cup", "prise": "prise", "pinch": "prise",
     "stück": "stueck", "stk": "stueck", "piece": "stueck", "bund": "bund", "bunch": "bund",
     "zehe": "zehe", "clove": "zehe", "scheibe": "scheibe", "slice": "scheibe", "blatt": "blatt",
-    "leaf": "blatt", "dose": "dose", "can": "dose", "glas": "glas", "handvoll": "handvoll", "kopf": "kopf",
+    "leaf": "blatt", "dose": "dose", "can": "dose", "tin": "dose", "glas": "glas", "jar": "glas",
+    "handvoll": "handvoll", "kopf": "kopf", "packung": "packung", "paket": "packung", "package": "packung",
+    "packet": "packung", "pack": "packung", "flasche": "flasche", "bottle": "flasche",
 }
 
 # canonical unit -> (base unit, factor, approximate?)
@@ -59,7 +61,11 @@ _TO_BASE = {
     "el": ("ml", 15, True), "tl": ("ml", 5, True), "tasse": ("ml", 250, True), "cup": ("ml", 240, True),
     "loeffel": ("ml", 10, True),
 }
-_COUNT_UNITS = {"prise", "stueck", "bund", "zehe", "scheibe", "blatt", "dose", "glas", "handvoll", "kopf"}
+_COUNT_UNITS = {"prise", "stueck", "bund", "zehe", "scheibe", "blatt", "dose", "glas", "handvoll", "kopf",
+                "packung", "flasche"}
+
+# A container with its size in front: "9-ounce can", "16 oz. jar", "500 g Packung".
+_SIZED_CONTAINER = re.compile(r"\s*[\d.,/½¼¾⅓⅔⅛]+[\s-]*[^\W\d_]+\.?[\s-]+([^\W\d_]+)\s*", re.I)
 
 
 @dataclass(frozen=True)
@@ -107,6 +113,8 @@ def normalize_unit(word: str) -> str | None:
     for candidate in (w, w.rstrip("s"), w[:-1] if w.endswith(("n", "e")) else w, w[:-2] if w.endswith("en") else w):
         if candidate in _ALIASES:
             return _ALIASES[candidate]
+    if m := _SIZED_CONTAINER.fullmatch(word):  # "9-ounce can": counted by its container; the size is kept in the text
+        return normalize_unit(m.group(1))
     return None
 
 

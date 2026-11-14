@@ -28,12 +28,20 @@ def _tokens(text: str) -> list[str]:
 
 
 def quote_support(quote: str, text: str) -> float:
-    """Share of the quote's words found, in order, in the text (0 to 1)."""
-    q, t = _tokens(quote), _tokens(text)
-    if not q:
-        return 0.0
-    blocks = difflib.SequenceMatcher(None, t, q, autojunk=False).get_matching_blocks()
-    return sum(b.size for b in blocks) / len(q)
+    """Share of the quote's words found, in order, in the text (0 to 1).
+
+    The transcript's hyphenated line ends are joined ("pre-" + "pared" = "prepared"), but a model
+    copying a quote often keeps the break ("pre-\\npared" or "pre- pared"). So the quote is tried as
+    written and with such breaks joined, and the better match counts.
+    """
+    t = _tokens(text)
+    best = 0.0
+    for candidate in (quote, re.sub(r"(?<=[^\W\d_])-\s*\n\s*(?=[^\W\d_])|(?<=[a-zäöüß])-\s+(?=[a-zäöüß])", "", quote)):
+        q = _tokens(candidate)
+        if q:
+            blocks = difflib.SequenceMatcher(None, t, q, autojunk=False).get_matching_blocks()
+            best = max(best, sum(b.size for b in blocks) / len(q))
+    return best
 
 
 def validate(recipe: Recipe, transcript: Transcript) -> list[Issue]:
@@ -192,7 +200,7 @@ def _check_coverage(recipe: Recipe, tr: Transcript) -> list[Issue]:
             texts.setdefault(line, []).extend(p for p in parts if p)
 
     for i in recipe.ingredients:
-        add(i.lines, i.quantity_text, f"{i.quantity:g}" if i.quantity is not None else None)
+        add(i.lines, i.quantity_text, i.unit, f"{i.quantity:g}" if i.quantity is not None else None)
     for t in recipe.tools:
         add(t.lines)
     for s in recipe.steps:

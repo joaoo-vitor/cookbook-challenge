@@ -69,6 +69,24 @@ def test_an_unknown_unit_is_none():
     assert normalize_unit("Zwiebel") is None and normalize_unit("") is None
 
 
+@pytest.mark.parametrize("unit, canonical", [
+    ("9-ounce can", "dose"),
+    ("9 ounce can", "dose"),
+    ("16 oz. jar", "glas"),
+    ("500 g Packung", "packung"),
+    ("1/2 lb package", "packung"),
+    ("12-ounce bottle", "flasche"),
+])
+def test_a_container_with_its_size_in_front_is_counted_by_the_container(unit, canonical):
+    assert normalize_unit(unit) == canonical
+    assert to_base(1, unit) == BaseAmount(1, "count", False)
+
+
+@pytest.mark.parametrize("unit", ["9-ounce", "1/2 l", "2 EL Butter", "9-ounce tub"])
+def test_sizes_without_a_known_container_stay_unknown_or_plain(unit):
+    assert normalize_unit(unit) in (None, "l", "el") and normalize_unit(unit) != "dose"
+
+
 def test_exact_conversions():
     assert to_base(1, "pfund") == BaseAmount(500, "g", False)
     assert to_base(2, "kg") == BaseAmount(2000, "g", False)

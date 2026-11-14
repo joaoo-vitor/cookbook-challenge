@@ -89,6 +89,39 @@ def test_a_quote_may_span_a_line_end_hyphen_and_ignore_case_and_punctuation():
     assert quote_support("500 g Rindfleisch", t.text_of(["p1:L2"])) == 1.0
 
 
+@pytest.mark.parametrize("quote", [
+    "1 teaspoon pre-\npared mustard",   # the model kept the line break
+    "1 teaspoon pre- pared mustard",    # ... or flattened it to a space
+    "1 teaspoon prepared mustard",      # ... or joined it
+])
+def test_a_quote_with_a_hyphenated_line_break_still_matches(quote):
+    t = Transcript()
+    t.lines = {"p1:L1": "1 teaspoon pre-", "p1:L2": "pared mustard"}
+    assert quote_support(quote, t.text_of(["p1:L1", "p1:L2"])) == 1.0
+
+
+def test_a_hyphenated_word_inside_a_line_is_not_damaged():
+    assert quote_support("a well- known cook", "a well-known cook") == 1.0
+    assert quote_support("a well-known cook", "a well-known cook") == 1.0
+
+
+def test_the_hyphen_fix_does_not_make_an_invented_quote_match():
+    assert quote_support("2 cups pre-\npared flour", "1 teaspoon prepared mustard") < 0.5
+
+
+def test_a_number_inside_the_unit_counts_as_covered():
+    t = Transcript()
+    t.lines = {"p1:L1": "Ham Loaf", "p1:L2": "1 9-ounce can pineapple"}
+    r = Recipe(
+        servings=Servings(),
+        ingredients=[Ingredient(id="i1", name="pineapple", name_en="pineapple", quantity=1, quantity_text="1",
+                                unit="9-ounce can", quote="1 9-ounce can pineapple", lines=["p1:L2"])],
+        steps=[Step(n=1, text="add pineapple", ingredient_ids=["i1"], quote="1 9-ounce can pineapple",
+                    lines=["p1:L2"])])
+    codes = _codes(validate(r, t))
+    assert "uncovered_number" not in codes and "unknown_unit" not in codes
+
+
 def test_quote_support_measures_the_share_found_in_order():
     assert quote_support("Rindfleisch und Pilze", "Rindfleisch und Salz") == pytest.approx(2 / 3)
     assert quote_support("", "text") == 0.0
