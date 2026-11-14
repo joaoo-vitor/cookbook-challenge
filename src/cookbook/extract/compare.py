@@ -15,6 +15,8 @@ import difflib
 import re
 from dataclasses import dataclass, field
 
+from cookbook.units import normalize_fractions
+
 MIN_AGREEMENT = 0.85  # below this the page is flagged unreliable (a guess, tune on more pages)
 
 _DASHES = re.compile(r"[‐‑–—]")
@@ -51,7 +53,7 @@ def _tokens(lines: list[str]) -> list[tuple[str, int]]:
     out: list[tuple[str, int]] = []
     pending: tuple[str, int] | None = None  # (word without its hyphen, line index)
     for li, line in enumerate(lines):
-        words = _DASHES.sub("-", line.replace("[drawing]", " ")).split()
+        words = _DASHES.sub("-", normalize_fractions(line.replace("[drawing]", " "))).split()
         words = [w for w in words if w.strip("-")]  # drop standalone dashes
         if not words:
             continue

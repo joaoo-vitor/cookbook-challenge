@@ -68,6 +68,19 @@ _COUNT_UNITS = {"prise", "stueck", "bund", "zehe", "scheibe", "blatt", "dose", "
 _SIZED_CONTAINER = re.compile(r"\s*[\d.,/½¼¾⅓⅔⅛]+[\s-]*[^\W\d_]+\.?[\s-]+([^\W\d_]+)\s*", re.I)
 
 
+_FRACTION_TEXT = {"½": "1/2", "¼": "1/4", "¾": "3/4", "⅓": "1/3", "⅔": "2/3",
+                  "⅛": "1/8", "⅜": "3/8", "⅝": "5/8", "⅞": "7/8"}
+
+
+def normalize_fractions(text: str) -> str:
+    """Write unicode fractions as digits, so two readings of the same number match.
+
+    "¾" becomes "3/4" and "1½" becomes "1 1/2".
+    """
+    text = re.sub(rf"(\d)\s?([{_FR}])", r"\1 \2", text)
+    return re.sub(rf"[{_FR}]", lambda m: _FRACTION_TEXT[m.group()], text)
+
+
 @dataclass(frozen=True)
 class Quantity:
     value: float | None  # the (lower) number, None if the text gives none

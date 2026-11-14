@@ -2,7 +2,20 @@
 
 import pytest
 
-from cookbook.units import BaseAmount, normalize_unit, numbers_in, parse_quantity, to_base
+from cookbook.units import BaseAmount, normalize_fractions, normalize_unit, numbers_in, parse_quantity, to_base
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("¾ cup", "3/4 cup"),
+    ("½ l", "1/2 l"),
+    ("1½ Tassen", "1 1/2 Tassen"),
+    ("1 ½ Tassen", "1 1/2 Tassen"),
+    ("⅓ und ⅔", "1/3 und 2/3"),
+    ("3/4 cup", "3/4 cup"),  # already digits
+    ("keine Brüche", "keine Brüche"),
+])
+def test_normalize_fractions(text, expected):
+    assert normalize_fractions(text) == expected
 
 
 @pytest.mark.parametrize("text, value, unit", [

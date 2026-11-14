@@ -80,6 +80,22 @@ def test_a_quantity_at_the_start_of_the_page_is_not_mistaken_for_a_page_number()
     assert [(f.kind, f.primary) for f in c.flags] == [("number", "4")]
 
 
+@pytest.mark.parametrize("primary, secondary", [
+    ("3/4 cup scalded milk", "¾ cup scalded milk"),  # one reading wrote the fraction as a glyph
+    ("1/2 teaspoon salt", "½ teaspoon salt"),
+    ("1 1/2 cups flour", "1½ cups flour"),
+    ("1 1/2 cups flour", "1 ½ cups flour"),
+])
+def test_the_same_fraction_written_two_ways_is_not_a_disagreement(primary, secondary):
+    c = _cmp(primary, secondary)
+    assert c.flags == [] and c.agreement == 1.0
+
+
+def test_different_fractions_are_still_flagged():
+    c = _cmp("3/4 cup scalded milk", "½ cup scalded milk")
+    assert [(f.kind, f.primary, f.secondary) for f in c.flags] == [("number", "3/4", "1/2")]
+
+
 def test_a_primary_unreadable_marker_is_a_flag_and_the_word_is_still_compared():
     c = _cmp("Salz und [?Pfeffer?] dazu", "Salz und Pfeffer dazu")
     [f] = c.flags

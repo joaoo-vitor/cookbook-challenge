@@ -13,7 +13,7 @@ import difflib
 import re
 
 from cookbook.models import Issue, Recipe
-from cookbook.units import normalize_unit, numbers_in, parse_quantity
+from cookbook.units import normalize_fractions, normalize_unit, numbers_in, parse_quantity
 
 from .transcript import Transcript
 
@@ -23,7 +23,7 @@ _ORDER = {"high": 0, "medium": 1, "low": 2}
 
 
 def _tokens(text: str) -> list[str]:
-    text = re.sub(r"\[drawing\]|\[\?|\?\]", " ", text.lower())
+    text = re.sub(r"\[drawing\]|\[\?|\?\]", " ", normalize_fractions(text.lower()))
     return _TOKEN.findall(re.sub(r"[‐‑–—]", "-", text))
 
 
@@ -62,6 +62,11 @@ def validate(recipe: Recipe, transcript: Transcript) -> list[Issue]:
     issues += _check_duplicates(recipe)
     issues += _check_servings(recipe)
     issues += _check_coverage(recipe, transcript)
+    return sort_issues(issues)
+
+
+def sort_issues(issues: list[Issue]) -> list[Issue]:
+    """Most serious first, otherwise in the order found."""
     return sorted(issues, key=lambda i: _ORDER[i.severity])
 
 
