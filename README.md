@@ -38,6 +38,18 @@ Copy-Item .env.example .env
 
 Then edit `.env` and set `GEMINI_API_KEY=`. Optionally set `GEMINI_MODEL=` (primary reader), `GEMINI_SECOND_MODEL=` (second reader) and `GEMINI_FALLBACK_MODELS=` (comma-separated). `.env` is gitignored, so never commit it.
 
+**Claude (optional).** A reader can also be a Claude model, which makes the two readings more independent than two Gemini models. Install the extra package and add a key (from the Anthropic Console, not the Claude app) to `.env`:
+
+```powershell
+pip install -e ".[claude]"
+```
+
+```
+ANTHROPIC_API_KEY=...
+```
+
+Claude is paid and has no free tier that I know of. The default is `claude-haiku-5-5`, the cheapest current model; set `CLAUDE_MODEL=` or `CLAUDE_SECOND_MODEL=` to change it. Usage is billed to whatever account the key belongs to, so use a key you are allowed to spend on this.
+
 ### The recipe PDF
 
 `Recipe.pdf` (the scanned Sauerbraten) is **not** in the repository, because it is a page from a printed book. Put your copy in the project folder next to this README. The name is already in `.gitignore`. Other recipes work the same way: any PDF you pass on the command line is read from where it is.
@@ -86,7 +98,7 @@ Reads every page and writes a transcript. Typed pages use their text layer and n
 - **What this cannot tell you** is which reading's order is right. The transcript, and so the structuring, follows the first reading. When a page reports a different reading order, compare `.txt` with `.second.txt` and check that no line mixes two columns.
 - The **agreement** (word similarity of the two readings, 0 to 1) is reported for each page. Below 0.85 the page is marked **UNRELIABLE**, because on an illegible page each model invents different text.
 - If the second reader fails (for example a 503), you still get the first reading, with a warning and no comparison.
-- Both readers are Gemini models, so a mistake they share is not flagged. Agreement does not prove a reading is right.
+- By default both readers are Gemini models, so a mistake they share is not flagged. A second reader from another provider (`--second-provider claude`) makes shared mistakes less likely. Agreement never proves a reading is right.
 
 First, see which models your key can use. Model names change often, and some are closed to new users:
 
@@ -101,8 +113,10 @@ python -m cookbook.extract Recipe.pdf --pages 1,2
 ```
 
 Options:
-- `--model NAME` sets the primary reader. Without it the code uses `GEMINI_MODEL` from `.env`, then `gemini-3.1-flash-lite`.
-- `--second-model NAME` sets the second reader. Without it: `GEMINI_SECOND_MODEL`, then `gemini-3.5-flash-lite`. It must be a different model from the first.
+- `--provider gemini|claude` sets the provider of the primary reader (default `gemini`) and `--second-provider gemini|claude` the provider of the second reader (default `gemini`). For example `--second-provider claude` reads every page with Gemini and with Claude Haiku.
+- `--model NAME` sets the primary reader's model. Without it the code uses `GEMINI_MODEL` (or `CLAUDE_MODEL`) from `.env`, then `gemini-3.1-flash-lite` (or `claude-haiku-5-5`).
+- `--second-model NAME` sets the second reader's model. Without it: `GEMINI_SECOND_MODEL` (or `CLAUDE_SECOND_MODEL`), then `gemini-3.5-flash-lite` (or `claude-haiku-5-5`). The two readers must not be the same provider and model.
+- `--claude-fallback-models A,B` lists fallbacks for a Claude reader. Without it: `CLAUDE_FALLBACK_MODELS`, then none, because the next model up costs about 20 times more. Gemini fallbacks (`--fallback-models`) are not used for Claude.
 - `--fallback-models A,B` lists the models to switch to when a reader's own model keeps failing. Without it: `GEMINI_FALLBACK_MODELS`, then `gemini-3.5-flash`.
 - `--no-fallback` never switches to another model.
 - `--single` reads with one model only, with no comparison and half the calls.

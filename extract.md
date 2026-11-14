@@ -106,7 +106,8 @@ class VisionLLM(Protocol):
     # planned: def structure(self, text: str, schema: dict, prompt: str) -> dict: ...
 ```
 
-- `GeminiClient` implements it now. Another provider can be added later without touching extract code.
+- `GeminiClient` and `ClaudeClient` implement it. The cache, retries and fallback live in a shared base class, so a provider only says how to make one call. `make_client("gemini" | "claude")` builds either.
+- `ClaudeClient` (built, tested offline with a stub of the SDK; **not yet run against the real API**: there was no key): images go as base64 blocks (type from the first bytes), no temperature (the current Claude models reject a non-default one), `output_config.effort` low for reading and medium for structuring (reasoning is billed as output), structured output through `output_config.format` with the schema passed through the SDK's `transform_schema` (the API needs `additionalProperties: false` on every object), only text blocks count as the answer, and an empty, refused or cut-off answer is an error that is retried like any other. The SDK's own retries are off. The `anthropic` package is an optional extra. Default model `claude-haiku-5-5`, with no default fallback (the next model up costs about 20 times more). Each reader chooses its provider independently (`--provider`, `--second-provider`).
 - Responses are cached by `hash(provider, model, prompt, image)` in `.cache/llm/` (gitignored), so reruns are reproducible and free.
 - The key goes in `.env` as `GEMINI_API_KEY`, with a `.env.example` containing no real value.
 - Each result carries input, output and thinking tokens and the time taken, for the README's cost section.
@@ -205,7 +206,7 @@ Rules: an unquantified ingredient has `quantity = null`, never a made-up number.
 
 ## 11. Open questions
 
-- Is a second reader from a different model family available and good enough? Both current readers are Gemini, so shared mistakes would go unflagged. Gemma returned a 503 and other providers are untested for handwriting.
+- Is a second reader from a different model family good enough? The Claude client exists (`--second-provider claude`) but has not been run on the real pages yet. The first thing to measure is its agreement with Gemini on the clean pages, the degraded copies and the five scans, and what its disagreements look like. Gemma returned a 503 and other providers are untested for handwriting.
 - Is 0.85 the right page agreement threshold? It needs more pages and a harder, more realistic set than synthetic degradation.
 - How strict is the coverage check? It covers numbers only. Words are not checked: an ingredient the model never lists is only caught if its line has a number.
 - Should the structuring be read twice by two models, like the transcript? We chose one call plus the checks; revisit if the second recipe shows misses the checks cannot see.
