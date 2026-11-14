@@ -1,11 +1,15 @@
-"""CLI to try a model on a PDF: python -m cookbook.extract Recipe.pdf [--pages 1,2] [--model NAME]
+"""CLI: python -m cookbook.extract Recipe.pdf [--pages 1,2] [--model NAME] [--second-model NAME]
 
-Writes each page's transcript and the token/latency numbers to --out (default
-data/experiments, which is gitignored) so candidate models can be compared.
+Reads every page with a vision model. By default a second, different model reads
+the same images and the differences are flagged (use --single to skip that).
+Writes the transcript, the second reading, the flags and the token/latency numbers
+to --out (default data/experiments, which is gitignored).
 """
 
 import argparse
+import dataclasses
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -13,20 +17,34 @@ from pathlib import Path
 from .transcribe import number_lines, transcribe_pdf
 
 
+def _safe(name: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", name)
+
+
+def _usage(calls) -> list[dict]:
+    return [{"model": c.model, "input_tokens": c.input_tokens, "output_tokens": c.output_tokens,
+             "thinking_tokens": c.thinking_tokens, "seconds": c.seconds, "cached": c.cached}
+            for c in calls]
+
+
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Transcribe a PDF with a vision model.")
+    ap = argparse.ArgumentParser(description="Transcribe a PDF with two vision models and flag differences.")
     ap.add_argument("pdf", nargs="?")
     ap.add_argument("--provider", default="gemini", choices=["gemini"])
-    ap.add_argument("--model", help="model name (default: GEMINI_MODEL or the built-in alias)")
+    ap.add_argument("--model", help="primary model (default: GEMINI_MODEL, then a built-in name)")
+    ap.add_argument("--second-model", help="second reader (default: GEMINI_SECOND_MODEL, then a built-in name)")
+    ap.add_argument("--single", action="store_true", help="one model only, no comparison")
     ap.add_argument("--pages", help="comma-separated 1-based pages, e.g. 1,2")
     ap.add_argument("--out", default="data/experiments")
     ap.add_argument("--list-models", action="store_true", help="list models the key can use")
     args = ap.parse_args()
 
-    from cookbook.llm import GeminiClient
+    from cookbook.llm import DEFAULT_SECOND_MODEL, GeminiClient
 
     try:
         llm = GeminiClient(model=args.model)
+        second = None if args.single else GeminiClient(
+            model=args.second_model or os.environ.get("GEMINI_SECOND_MODEL") or DEFAULT_SECOND_MODEL)
     except RuntimeError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
@@ -39,27 +57,41 @@ def main() -> int:
 
     pages = {int(p) for p in args.pages.split(",")} if args.pages else None
     try:
-        transcripts = transcribe_pdf(args.pdf, llm, pages=pages)
+        transcripts = transcribe_pdf(args.pdf, llm, pages=pages, second=second)
     except Exception as e:  # API errors, unreadable PDF: short message, no traceback
         print(f"error ({type(e).__name__}): {str(e)[:400]}", file=sys.stderr)
         return 1
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    stem = f"{Path(args.pdf).stem}_{re.sub(r'[^A-Za-z0-9._-]+', '-', llm.model)}"
+    stem = f"{Path(args.pdf).stem}_{_safe(llm.model)}"
+    print(f"primary: {llm.model}" + (f" | second reader: {second.model}" if second else " | single read"))
     for t in transcripts:
-        numbered = "\n".join(number_lines(t.page, t.text))
-        (out / f"{stem}_p{t.page}.txt").write_text(numbered + "\n", encoding="utf-8")
-        usage = [{"model": c.model, "input_tokens": c.input_tokens,
-                  "output_tokens": c.output_tokens, "thinking_tokens": c.thinking_tokens,
-                  "seconds": c.seconds, "cached": c.cached}
-                 for c in t.calls]
-        (out / f"{stem}_p{t.page}.usage.json").write_text(
-            json.dumps(usage, indent=2), encoding="utf-8")
-        print(f"page {t.page} [{t.strategy.value}, {t.source}] -> {out / (stem + f'_p{t.page}.txt')}")
+        base = out / f"{stem}_p{t.page}"
+        base.with_name(base.name + ".txt").write_text(
+            "\n".join(number_lines(t.page, t.text)) + "\n", encoding="utf-8")
+        base.with_name(base.name + ".usage.json").write_text(
+            json.dumps({"primary": _usage(t.calls), "second": _usage(t.second_calls)}, indent=2),
+            encoding="utf-8")
+        if t.second_text is not None:
+            base.with_name(base.name + ".second.txt").write_text(
+                "\n".join(number_lines(t.page, t.second_text)) + "\n", encoding="utf-8")
+        if t.comparisons or t.warnings:
+            base.with_name(base.name + ".flags.json").write_text(
+                json.dumps({"comparisons": [dataclasses.asdict(c) for c in t.comparisons],
+                            "warnings": t.warnings}, indent=2, ensure_ascii=False), encoding="utf-8")
+
+        print(f"\npage {t.page} [{t.strategy.value}, {t.source}] -> {base.with_name(base.name + '.txt')}")
         for c in t.calls:
-            print(f"  tokens in/out/thinking: {c.input_tokens}/{c.output_tokens}/{c.thinking_tokens}, {c.seconds}s"
-                  f"{' (cached)' if c.cached else ''}")
+            print(f"  primary tokens in/out/thinking: {c.input_tokens}/{c.output_tokens}/{c.thinking_tokens}, "
+                  f"{c.seconds}s{' (cached)' if c.cached else ''}")
+        for cmp in t.comparisons:
+            verdict = "UNRELIABLE: the two reads mostly disagree" if cmp.unreliable else "reads agree"
+            print(f"  {cmp.label}: agreement {cmp.agreement:.2f} ({verdict}), {len(cmp.flags)} flag(s)")
+            for f in cmp.flags:
+                print(f"    [{f.severity}] {f.line} {f.kind}: {f.primary!r} vs {f.secondary!r}")
+        for w in t.warnings:
+            print(f"  warning: {w}")
     return 0
 
 

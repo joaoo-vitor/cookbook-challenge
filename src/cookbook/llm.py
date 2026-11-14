@@ -18,7 +18,10 @@ from pathlib import Path
 from typing import Protocol
 
 CACHE_DIR = Path(".cache") / "llm"  # gitignored
-DEFAULT_GEMINI_MODEL = "gemini-flash-latest"  # alias, unverified: override with GEMINI_MODEL
+# Models that worked for our key in November 2026. Names change and get retired:
+# override with GEMINI_MODEL / GEMINI_SECOND_MODEL and check `--list-models`.
+DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite"
+DEFAULT_SECOND_MODEL = "gemini-3.5-flash-lite"
 
 
 @dataclass

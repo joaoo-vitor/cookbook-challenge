@@ -18,13 +18,17 @@ class FakeLLM:
 
     name = "fake"
 
-    def __init__(self, answer="Hierzu eignen sich die festen Bratenstücke."):
+    def __init__(self, answer="Hierzu eignen sich die festen Bratenstücke.", model="fake-model", fail=None):
         self.answer = answer
+        self.model = model
+        self.fail = fail  # an exception to raise instead of answering
         self.calls = []
 
     def transcribe(self, image, prompt):
         self.calls.append((image, prompt))
-        return LLMResult(self.answer, "fake-model", 10, 5, 0.0)
+        if self.fail:
+            raise self.fail
+        return LLMResult(self.answer, self.model, 10, 5, 0.0)
 
 
 def _png(text=GOOD) -> bytes:
@@ -87,6 +91,79 @@ def test_number_lines_skips_blank_lines():
 
 def test_prompt_forbids_correction_and_guessing_numbers():
     assert "Do not correct" in PROMPT and "Never guess a number" in PROMPT
+
+
+# --- two readers --------------------------------------------------------------
+def _scan(tmp_path):
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_image(page.rect, stream=_png())
+    return _save(doc, tmp_path)
+
+
+def test_two_models_read_the_same_image_and_differences_are_flagged(tmp_path):
+    body = "Man nimmt {} Zwiebeln und Salz\nPfeffer Nelken Lorbeer und Wasser dazugeben\nAlles gut aufkochen"
+    first = FakeLLM(body.format(4), model="model-a")
+    other = FakeLLM(body.format(5), model="model-b")
+    [t] = transcribe_pdf(_scan(tmp_path), first, second=other)
+    assert t.text == body.format(4)  # the primary reading is the transcript
+    assert t.second_text == body.format(5)
+    assert first.calls[0][0] == other.calls[0][0]  # the same image went to both
+    [cmp] = t.comparisons
+    assert cmp.label == "page" and [f.kind for f in cmp.flags] == ["number"]
+    assert not t.unreliable and len(t.second_calls) == 1
+
+
+def test_unrelated_readings_make_the_page_unreliable(tmp_path):
+    first = FakeLLM("Zwiebeln in Scheiben schneiden und kochen", model="model-a")
+    other = FakeLLM("Mehl Zucker Milch Eier verrühren und backen", model="model-b")
+    [t] = transcribe_pdf(_scan(tmp_path), first, second=other)
+    assert t.unreliable
+
+
+def test_a_failing_second_reader_keeps_the_primary_reading(tmp_path):
+    first = FakeLLM("Salz und Pfeffer dazugeben", model="model-a")
+    other = FakeLLM(model="model-b", fail=RuntimeError("503 UNAVAILABLE"))
+    [t] = transcribe_pdf(_scan(tmp_path), first, second=other)
+    assert t.text == "Salz und Pfeffer dazugeben" and t.comparisons == []
+    assert len(t.warnings) == 1 and "second read failed" in t.warnings[0] and "503" in t.warnings[0]
+
+
+def test_a_failing_primary_reader_is_an_error(tmp_path):
+    first = FakeLLM(model="model-a", fail=RuntimeError("boom"))
+    with pytest.raises(RuntimeError):
+        transcribe_pdf(_scan(tmp_path), first, second=FakeLLM(model="model-b"))
+
+
+def test_the_second_reader_must_be_a_different_model(tmp_path):
+    with pytest.raises(ValueError):
+        transcribe_pdf(_scan(tmp_path), FakeLLM(model="same"), second=FakeLLM(model="same"))
+
+
+def test_typed_pages_do_not_call_either_model(tmp_path):
+    doc = pymupdf.open()
+    doc.new_page().insert_text((50, 100), GOOD, fontsize=11)
+    first, other = FakeLLM(model="model-a"), FakeLLM(model="model-b")
+    [t] = transcribe_pdf(_save(doc, tmp_path), first, second=other)
+    assert first.calls == [] and other.calls == [] and t.comparisons == []
+
+
+def test_images_on_a_typed_page_are_compared_with_their_own_ids(tmp_path):
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_text((50, 100), "Erster Absatz oben auf der Seite.", fontsize=11)
+    page.insert_image(pymupdf.Rect(50, 300, 350, 450), stream=_png(), keep_proportion=False)
+    first = FakeLLM("Rosinen 100 g", model="model-a")
+    other = FakeLLM("Rosinen 150 g", model="model-b")
+    [t] = transcribe_pdf(_save(doc, tmp_path), first, second=other)
+    [cmp] = t.comparisons
+    assert cmp.label == "image 0" and cmp.flags[0].line == "p1:image0:L1"
+    assert "Rosinen 100 g" in t.text  # the primary reading is merged into the page
+
+
+def test_without_a_second_reader_nothing_is_compared(tmp_path):
+    [t] = transcribe_pdf(_scan(tmp_path), FakeLLM())
+    assert t.comparisons == [] and t.second_text is None and not t.unreliable
 
 
 def test_sniff_mime_reads_the_first_bytes():
