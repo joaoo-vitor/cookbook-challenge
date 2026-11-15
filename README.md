@@ -9,11 +9,11 @@ Built for the finlyt engineering case study. Stages: **ingest, extract, manipula
 |---|---|---|---|
 | Ingest | Decides, per PDF page, how to read it (text layer, OCR layer, or vision model) | Built (PDF only) | [ingest.md](ingest.md) |
 | Extract | Transcribes pages with two vision models and flags where they disagree, fills a structured recipe (ingredients, tools, steps, servings) and checks it | Built | [extract.md](extract.md) |
-| Manipulate | Change servings (built); make vegan (not started) | Partly built | |
-| Web page | Upload, check the text, check the recipe, change it | Built (vegan toggle disabled) | [web.md](web.md) |
+| Manipulate | Change servings, make vegan; combinable, in a fixed order, every change logged with its reason | Built | [manipulate.md](manipulate.md) |
+| Web page | Upload, check the text, check the recipe, change it | Built | [web.md](web.md) |
 | Output | Step-by-step recipe, changes against the original | Not started | |
 
-Not built yet: the vegan rule, the output renderers, `examples/` and `AI_LOG.md`.
+Not built yet: the output renderers, `examples/` and `AI_LOG.md`.
 
 ## Setup
 
@@ -193,13 +193,16 @@ for c in pages[0].comparisons:
     print(c.label, c.agreement, c.unreliable, c.flags)
 ```
 
-### Manipulate (servings)
+### Manipulate (vegan, servings)
 
-Takes the `.recipe.json` that extract wrote and changes the number of servings:
+Takes the `.recipe.json` that extract wrote and changes it: `--servings N` for the number of servings, `--vegan` to make it vegan, or both. The rules always run in the same order (vegan, then servings), so the result does not depend on the order you ask for them.
 
 ```powershell
 python -m cookbook.manipulate data/my_tests/pancakes_gemini-3.1-flash-lite.recipe.json --servings 6
+python -m cookbook.manipulate data/my_tests/pancakes_gemini-3.1-flash-lite.recipe.json --vegan --servings 6
 ```
+
+**Vegan.** A table in [vegan_table.py](src/cookbook/manipulate/vegan_table.py) knows what is certainly animal (meat, poultry, fish, seafood, dairy, eggs, honey, gelatine, lard; English, German and Portuguese words) and its stand-in (beef becomes seitan, bacon smoked tofu, butter vegan butter, and so on). One model call names each stand-in in the recipe's language, finds animal ingredients the table does not know, and rewrites every step that mentions something animal. Plain code checks the answer: the table has the last word on what is animal, a stand-in must not be animal itself, a rewritten step must keep every number and name nothing animal (also not inside a longer word), and a wrong answer is sent back once. A step that still fails keeps its original text with a **high** warning, so a wrong rewrite is never shown as a right one. Wine, beer, sugar and vinegar are not treated. Needs the Gemini key like extract. Details and limits: [manipulate.md](manipulate.md).
 
 It writes `<name>.servings6.recipe.json` and `<name>.servings6.changes.json` next to the recipe, and prints what changed, what was left alone and why, and what to check by hand. If the recipe does not state its servings, the base is the model's estimate (flagged in the output); give the real number with `--base-servings 4`. Amounts scale by the kind of ingredient (seasonings grow more slowly than the rest, and vague amounts such as "a little" are kept), are rounded to values a kitchen uses, and the amounts written inside the steps are updated too.
 

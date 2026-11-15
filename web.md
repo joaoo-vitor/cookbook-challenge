@@ -17,7 +17,7 @@ The page holds the transcript and the recipe and sends them back with every requ
 | `GET /api/jobs/{id}/page/{n}.jpg` | the original page, so text can be compared with it |
 | `POST /api/structure` | the second model fills the recipe schema from the transcript |
 | `POST /api/check` | checks an edited recipe against the transcript again (plain code, no model) |
-| `POST /api/manipulate` | changes the servings; the vegan rule answers "not available yet" |
+| `POST /api/manipulate` | makes the recipe vegan (the primary model writes the new words, code checks them) and/or changes the servings |
 
 Only reading is a job, because two models per page take seconds. Jobs and uploaded files live in memory and in a temp folder; the last five are kept and everything is removed when the server stops.
 
@@ -25,7 +25,7 @@ Only reading is a job, because two models per page take seconds. Jobs and upload
 
 1. **Check the text.** The original page beside the transcript. Where the two readings differ, the word the first model read is underlined (red for numbers, amber for words). Clicking it shows both readings: keep the first, use the second, or type your own. A doubt whose word cannot be found in the line marks the whole line. A page whose readings mostly disagree is marked *unreliable*, with a button to say you checked the whole page. Settled doubts are removed from the transcript sent on, so they do not come back as warnings in the recipe; unsettled ones stay, and the recipe step shows them.
 2. **Check the recipe.** Every ingredient, tool and step is editable and shows the quote and lines it came from. Items with issues are coloured by the worst severity and list the messages; a side panel lists all issues. *Re-check* runs the same checks on your edits, so a wrong amount is caught again. Servings that are only the model's estimate are labelled as such.
-3. **Change the recipe.** Choose the servings (and, if you know it, what the recipe makes now). The order of manipulations is shown but fixed: rules run in one order whatever you ask, and a substitution keeps its ingredient's scaling class, so the result is the same either way. The result shows original and new side by side, then a log of what changed, what was left alone and what to check by hand. The vegan option is shown disabled until that rule exists.
+3. **Change the recipe.** Choose to make it vegan, to change the servings (and, if you know it, what the recipe makes now), or both. The order of manipulations is shown but fixed: rules run in one order whatever you ask, and a substitution keeps its ingredient's scaling class, so the result is the same either way. The result shows original and new side by side, then a log of what changed, what was left alone and what to check by hand. Warnings from the vegan rule carry a severity (high: a step or ingredient the program could not make vegan and left as written), and the changed ingredients and steps are highlighted. Vegan is the one option that calls a model, so it takes a few seconds. See [manipulate.md](manipulate.md).
 
 ## Checking warnings off
 
@@ -41,4 +41,4 @@ Text from a model is only ever put on the page as text, never as HTML. Uploads a
 
 ## Tests
 
-`tests/test_web.py` runs the app in-process with fake readers: no network, no key. It covers upload, the job, both readings of a doubtful word, the page image, refused files, structuring with edited lines, re-checking, scaling and the "not available" vegan answer.
+`tests/test_web.py` runs the app in-process with fake readers: no network, no key. It covers upload, the job, both readings of a doubtful word, the page image, refused files, structuring with edited lines, re-checking, scaling, and the vegan rule (with a fake model, including an unreadable answer and a missing key).
