@@ -76,7 +76,7 @@ def main() -> int:
         print(f"servings: {result.base_servings} -> {result.target_servings}{estimate}")
     for kind in ("warning", "changed", "unchanged"):
         for c in (c for c in result.changes if c.kind == kind):
-            what = f"{c.before} -> {c.after}" if c.kind == "changed" and c.field != "text" else (c.after or "")
+            what = f"{c.before} -> {c.after}" if c.kind == "changed" and c.field != "text" else (c.after or c.before or "")
             level = f"[{c.severity}] " if c.severity else ""
             print(f"  {_MARK[c.kind]} {level}{c.target} {c.field}: {what[:90]}\n             {c.reason}")
     counts = {k: sum(1 for c in result.changes if c.kind == k) for k in ("changed", "unchanged", "warning")}

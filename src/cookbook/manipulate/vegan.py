@@ -81,7 +81,8 @@ Rules for a rewritten step:
   of the sentence.
 - Use the stand-in's name exactly as in `substitute_name`, and use it in every step that needs it.
 - A thing made from the animal ingredient (the roast's pan juices) is replaced by something that fits the
-  stand-in (the pan's fond, or a vegetable stock).
+  stand-in (a vegetable stock, or the fond of the pan). Never keep the animal ingredient's name inside a new
+  word, and never name the old ingredient at all.
 Answer with the JSON only."""
 
 
@@ -187,7 +188,8 @@ def _check(recipe: Recipe, entries: dict[str, Entry | None], plan: VeganPlan) ->
         if sorted(numbers_in(new)) != sorted(numbers_in(step.text)):
             why = "the numbers changed: it must keep exactly the numbers of the original"
         elif _leftovers(new, names, allowed):
-            why = f"it still mentions {', '.join(_leftovers(new, names, allowed))}"
+            why = (f"it still mentions {', '.join(_leftovers(new, names, allowed))}, also as the start of a longer word: "
+                   "use words that do not contain the old ingredient's name")
         elif len(new) > 2 * len(step.text) + 60:
             why = "it is far longer than the original: change only what is needed"
         else:

@@ -271,6 +271,22 @@ def test_derived_things_are_reported_and_must_go_with_the_meat():
     assert again.recipe.steps[2].text == "Den Bratenfond mit Salz abschmecken." and _changes(again, "warning", "step 3", "high")
 
 
+def test_a_new_word_that_still_starts_with_the_old_ingredients_name_is_refused():
+    roast = Recipe(language="de", ingredients=[Ingredient(id="i1", name="Braten", name_en="roast", quote="Braten", lines=["p1:L1"])],
+                   steps=[Step(n=1, text="Den Bratenfond mit Mehl anschwitzen.", ingredient_ids=["i1"], quote="Bratenfond", lines=["p1:L1"])])
+    swaps = [_swap("i1", "Seitan", "seitan", "meat")]
+    bad = {"swaps": swaps, "steps": [{"n": 1, "text": "Den Bratensud mit Mehl anschwitzen."}]}
+    llm = FakeLLM(bad)
+    result = make_vegan(roast, llm)
+    assert "do not contain the old ingredient's name" in llm.prompts[1]
+    assert result.recipe.steps[0].text == "Den Bratenfond mit Mehl anschwitzen." and _changes(result, "warning", "step 1", "high")
+    good = {"swaps": swaps, "steps": [{"n": 1, "text": "Den Sud mit Mehl anschwitzen."}]}
+    assert make_vegan(roast, FakeLLM(good)).recipe.steps[0].text == "Den Sud mit Mehl anschwitzen."
+    # the verb "angebraten" is not the roast
+    verb = {"swaps": swaps, "steps": [{"n": 1, "text": "Den Sud, wenn er angebraten ist, mit Mehl anschwitzen."}]}
+    assert make_vegan(roast, FakeLLM(verb)).recipe.steps[0].text.startswith("Den Sud, wenn er angebraten")
+
+
 def test_meat_stand_ins_get_a_loud_warning_and_other_stand_ins_do_not():
     meat = Recipe(language="de", ingredients=[Ingredient(id="i1", name="Rindfleisch", name_en="beef", quantity=500, quantity_text="500",
                                                          unit="g", quote="500 g Rindfleisch", lines=["p1:L1"])],
