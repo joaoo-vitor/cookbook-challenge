@@ -22,7 +22,7 @@ const S = {
   recipe: null, issues: [], recipeDirty: false,
   checkedIssues: new Set(), // issues the person marked as checked (hidden until they reset the warnings)
   busy: null,            // text shown over a panel while the server works
-  manip: null, scaleOn: true, servings: '', base: '',
+  manip: null, scaleOn: true, veganOn: false, servings: '', base: '',
 };
 
 const SEVERITIES = ['high', 'medium', 'low'];
@@ -568,8 +568,9 @@ function manipulateStep() {
     h('span', {}, 'the recipe makes ', h('input', { type: 'number', min: '1', placeholder: sv.value == null ? '?' : String(sv.value), value: S.base, 'aria-label': 'Servings the recipe makes now',
       oninput: (e) => { S.base = e.target.value; } }), ' ',
       h('span', { class: sv.stated || S.base !== '' ? 'hint' : 'estimate' }, `(${baseNote})`)));
-  const vegan = h('div', { class: 'choice disabled' },
-    h('label', {}, h('input', { type: 'checkbox', disabled: true }), ' ', h('b', {}, 'Make it vegan')), h('span', { class: 'chip low' }, 'coming soon'));
+  const vegan = h('div', { class: 'choice' },
+    h('label', {}, h('input', { type: 'checkbox', checked: S.veganOn, onchange: (e) => { S.veganOn = e.target.checked; } }), ' ', h('b', {}, 'Make it vegan')),
+    h('span', { class: 'hint', style: 'margin:0' }, 'animal ingredients get plant-based stand-ins and the steps are rewritten (a model writes the words, the program checks them)'));
 
   const form = h('div', { class: 'panel' }, h('h2', {}, 'What should change?'),
     h('p', { class: 'hint' }, 'Choose what to change. Everything the program does is listed afterwards, with the reason.'),
@@ -584,12 +585,15 @@ function manipulateStep() {
 
 async function applyManip() {
   S.error = null;
-  if (!S.scaleOn) { S.error = 'Choose something to change.'; render(); return; }
-  const servings = parseInt(S.servings, 10);
-  if (!(servings > 0)) { S.error = 'Type the number of servings you want.'; render(); return; }
-  const base = S.base === '' ? null : parseInt(S.base, 10);
-  S.busy = 'Changing the recipe…'; render();
-  try { S.manip = await postJson('/api/manipulate', { recipe: S.recipe, servings, base_servings: base }); }
+  if (!S.scaleOn && !S.veganOn) { S.error = 'Choose something to change.'; render(); return; }
+  let servings = null, base = null;
+  if (S.scaleOn) {
+    servings = parseInt(S.servings, 10);
+    if (!(servings > 0)) { S.error = 'Type the number of servings you want.'; render(); return; }
+    base = S.base === '' ? null : parseInt(S.base, 10);
+  }
+  S.busy = S.veganOn ? 'The model is rewriting the steps, and the program is checking them…' : 'Changing the recipe…'; render();
+  try { S.manip = await postJson('/api/manipulate', { recipe: S.recipe, servings, base_servings: base, vegan: S.veganOn }); }
   catch (e) { S.error = e.message; S.manip = null; }
   S.busy = null; render();
 }
@@ -611,6 +615,7 @@ function manipResult() {
   const counts = { changed: 0, unchanged: 0, warning: 0 };
   log.forEach((c) => { counts[c.kind] += 1; });
   const logItem = (c) => h('li', { class: c.kind },
+    c.severity ? h('span', { class: `tag ${c.severity}`, style: 'margin-right:6px' }, c.severity) : null,
     h('b', {}, `${c.kind === 'warning' ? 'Check: ' : ''}${c.target} · ${c.field}`),
     c.kind === 'changed' && c.field !== 'text' ? h('span', { class: 'arrow' }, `  ${c.before} → ${c.after}`) : null,
     h('span', { class: 'why' }, c.reason));
@@ -618,10 +623,10 @@ function manipResult() {
   return h('div', {},
     m.base_is_estimate ? banner('warn', `The amounts rest on an estimate of ${m.base_servings} servings made by the model, not on the text. Set the real number above and apply again if you know it.`) : null,
     h('div', { class: 'panel' },
-      h('h2', {}, `${m.base_servings} → ${m.target_servings} servings`),
+      h('h2', {}, [m.rules.includes('make_vegan') ? 'Vegan' : null, m.target_servings != null ? `${m.base_servings} → ${m.target_servings} servings` : null].filter(Boolean).join(' · ')),
       h('div', { class: 'compare', style: 'margin-top:12px' },
-        h('div', {}, h('h3', { class: 'sec' }, `Original (${m.base_servings})`), table(before, false), h('h3', { class: 'sec' }, 'Steps'), steps(before, false)),
-        h('div', {}, h('h3', { class: 'sec' }, `New (${m.target_servings})`), table(m.recipe, true), h('h3', { class: 'sec' }, 'Steps'), steps(m.recipe, true))),
+        h('div', {}, h('h3', { class: 'sec' }, 'Original' + (m.base_servings != null ? ` (${m.base_servings})` : '')), table(before, false), h('h3', { class: 'sec' }, 'Steps'), steps(before, false)),
+        h('div', {}, h('h3', { class: 'sec' }, 'New' + (m.target_servings != null ? ` (${m.target_servings})` : '')), table(m.recipe, true), h('h3', { class: 'sec' }, 'Steps'), steps(m.recipe, true))),
       h('div', { class: 'actions' }, h('button', { class: 'btn', onclick: download }, 'Download as JSON'))),
     h('div', { class: 'panel' },
       h('h2', {}, 'What was done and why'),
@@ -632,7 +637,7 @@ function manipResult() {
 function download() {
   const m = S.manip;
   const blob = new Blob([JSON.stringify({ recipe: m.recipe, changes: m.changes, base_servings: m.base_servings, target_servings: m.target_servings, base_is_estimate: m.base_is_estimate }, null, 2)], { type: 'application/json' });
-  const a = h('a', { href: URL.createObjectURL(blob), download: `recipe.servings${m.target_servings}.json` });
+  const a = h('a', { href: URL.createObjectURL(blob), download: `recipe${m.rules.includes('make_vegan') ? '.vegan' : ''}${m.target_servings != null ? '.servings' + m.target_servings : ''}.json` });
   document.body.append(a); a.click(); a.remove();
 }
 

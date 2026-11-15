@@ -22,6 +22,7 @@ from cookbook.extract.transcribe import transcribe_pdf
 from cookbook.extract.transcript import Transcript, build_transcript
 from cookbook.manipulate.engine import manipulate
 from cookbook.manipulate.scaling import NeedsBaseServings
+from cookbook.manipulate.vegan import VeganError
 from cookbook.models import Recipe
 
 from .jobs import Jobs, describe_pages
@@ -147,14 +148,18 @@ def create_app(make_readers=default_readers) -> FastAPI:
 
     @app.post("/api/manipulate")
     def change(req: ManipulateRequest):
-        if req.vegan:
-            raise HTTPException(501, "making a recipe vegan is not available yet")
-        if req.servings is None:
-            raise HTTPException(400, "choose a manipulation: give the number of servings wanted")
+        if not req.vegan and req.servings is None:
+            raise HTTPException(400, "choose a manipulation: make it vegan, or give the number of servings wanted")
+        llm = readers().primary if req.vegan else None  # only the vegan rule needs a model
         try:
-            result = manipulate(req.recipe, servings=req.servings, base_servings=req.base_servings)
+            result = manipulate(req.recipe, servings=req.servings, base_servings=req.base_servings,
+                                vegan=req.vegan, llm=llm)
+        except VeganError as e:
+            raise HTTPException(502, str(e)) from e
         except (NeedsBaseServings, ValueError) as e:
             raise HTTPException(422, str(e)) from e
+        except Exception as e:  # noqa: BLE001 - a provider error while the model wrote the new steps
+            raise HTTPException(502, f"{type(e).__name__}: {str(e)[:300]}") from e
         return result
 
     @app.get("/")

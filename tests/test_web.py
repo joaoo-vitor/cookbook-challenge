@@ -1,5 +1,6 @@
 """Tests for the web server. The models are replaced by fakes, so nothing is called over the network."""
 
+import json
 import time
 
 import pymupdf
@@ -198,10 +199,48 @@ def test_manipulate_says_when_the_base_is_missing_and_accepts_one():
     assert ok.status_code == 200 and ok.json()["base_servings"] == 4
 
 
-def test_vegan_is_not_available_yet_and_an_empty_request_is_refused():
-    client, _ = _client()
-    assert client.post("/api/manipulate", json={"recipe": _recipe().model_dump(), "vegan": True}).status_code == 501
+def _plan_json():
+    swap = {"id": "i1", "category": "meat", "substitute_name": "Seitan", "substitute_en": "seitan", "reason": "beef"}
+    cream = {"id": "i5", "category": "dairy", "substitute_name": "Hafersahne", "substitute_en": "plant cream", "reason": "cream"}
+    return json.dumps({"swaps": [swap, cream], "steps": [
+        {"n": 1, "text": "Den Seitan in Würfel schneiden"}, {"n": 4, "text": "am Ende Hafersahne dazu"}]})
+
+
+def test_vegan_swaps_the_ingredients_with_the_model_and_returns_the_log():
+    client, primary = _client(primary=FakeReader("m1", READ, _plan_json()))
+    r = client.post("/api/manipulate", json={"recipe": _recipe().model_dump(), "vegan": True})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["rules"] == ["make_vegan"] and body["target_servings"] is None
+    names = {i["id"]: i["name"] for i in body["recipe"]["ingredients"]}
+    assert names["i1"] == "Seitan" and names["i5"] == "Hafersahne"
+    assert primary.structured == 1
+    assert any(c["kind"] == "warning" and c["severity"] == "medium" for c in body["changes"])  # the meat note
+
+
+def test_vegan_and_servings_can_be_asked_together():
+    client, _ = _client(primary=FakeReader("m1", READ, _plan_json()))
+    r = client.post("/api/manipulate", json={"recipe": _recipe().model_dump(), "vegan": True, "servings": 8})
+    assert r.status_code == 200 and r.json()["rules"] == ["make_vegan", "scale_servings"]
+    assert r.json()["recipe"]["ingredients"][0]["quantity"] == 1000
+
+
+def test_scaling_alone_calls_no_model_and_an_empty_request_is_refused():
+    client, primary = _client()
+    assert client.post("/api/manipulate", json={"recipe": _recipe().model_dump(), "servings": 8}).status_code == 200
+    assert primary.structured == 0
     assert client.post("/api/manipulate", json={"recipe": _recipe().model_dump()}).status_code == 400
+
+
+def test_an_unreadable_vegan_answer_is_a_502_and_a_missing_key_a_503():
+    client, _ = _client(primary=FakeReader("m1", READ, "not json"))
+    assert client.post("/api/manipulate", json={"recipe": _recipe().model_dump(), "vegan": True}).status_code == 502
+
+    def no_key():
+        raise RuntimeError("GEMINI_API_KEY is not set")
+
+    r = TestClient(create_app(no_key)).post("/api/manipulate", json={"recipe": _recipe().model_dump(), "vegan": True})
+    assert r.status_code == 503
 
 
 def test_the_page_opens_without_a_key_and_the_error_comes_when_a_model_is_needed():
