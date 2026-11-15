@@ -22,6 +22,7 @@ class Change(BaseModel):
     before: str | None = None
     after: str | None = None
     reason: str  # in a sentence, for a person
+    severity: Literal["high", "medium", "low"] | None = None  # for a warning: how much the person should worry
 
 
 class Manipulated(BaseModel):

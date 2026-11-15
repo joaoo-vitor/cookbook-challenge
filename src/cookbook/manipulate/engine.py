@@ -8,25 +8,33 @@ replaces. Everything the rules do is in the change log.
 
 from __future__ import annotations
 
+from cookbook.llm import TextLLM
 from cookbook.models import Recipe
 
 from .changes import Manipulated
 from .scaling import scale_servings, scaling_classes
+from .vegan import make_vegan
 
 RULE_ORDER = ("make_vegan", "scale_servings")  # the order rules run in, whatever the request
 
 
 def manipulate(recipe: Recipe, *, servings: int | None = None, base_servings: int | None = None,
-               round_amounts: bool = True) -> Manipulated:
+               vegan: bool = False, llm: TextLLM | None = None, round_amounts: bool = True) -> Manipulated:
     """Apply the requested rules to a copy of `recipe`.
 
     `servings` is the number of servings wanted; `base_servings` is what the recipe makes, if the
-    user knows it (it replaces the recipe's own number, stated or estimated).
+    user knows it (it replaces the recipe's own number, stated or estimated). `vegan` needs `llm`,
+    the model that writes the stand-ins' names and the new step texts.
     """
     classes = scaling_classes(recipe)  # decided from the original recipe, before any rule runs
     result = Manipulated(recipe=recipe.model_copy(deep=True))
     for rule in RULE_ORDER:
-        if rule == "scale_servings" and servings is not None:
+        if rule == "make_vegan" and vegan:
+            made = make_vegan(result.recipe, llm)
+            result.recipe = made.recipe
+            result.changes += made.changes
+            result.rules.append(rule)
+        elif rule == "scale_servings" and servings is not None:
             scaled = scale_servings(result.recipe, servings, base_servings, classes, round_amounts)
             result.recipe = scaled.recipe
             result.changes += scaled.changes
