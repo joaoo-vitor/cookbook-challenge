@@ -35,7 +35,7 @@ The code was written with Claude Code (the desktop app) over three days (13 to 1
 
 - **The Claude reader** (`--provider claude`) is built and tested only against a stub of the SDK. I had no key with credits, so it has never run on a real page. It is the code most at risk of an invented API.
 - **Docker.** The `Dockerfile` and `docker-compose.yml` were written on a machine without Docker. What was checked: the project installs as a non-editable package in a clean environment, the page and its files are served from it, and an upload is accepted from another folder. The image build and `docker compose up` themselves were not run.
-- **The price per token** in the README comes from third-party listings and was not checked on Google's page.
+- **The price per token** in the README is only a comparison for a paid account (the project runs on the free tier, which has limits and no price). It comes from third-party listings and was not checked on Google's page. The agent put it in the cost section first, as if it applied, and I corrected it.
 - **The numbers** from the experiments come from two pages of one recipe, five scanned English pages and a few degraded copies. They are a signal, not an evaluation: there is no hand-made reference yet.
 
 ## What worked
