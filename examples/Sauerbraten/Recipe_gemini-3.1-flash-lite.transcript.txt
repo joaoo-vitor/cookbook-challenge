@@ -1,0 +1,43 @@
+p1:L1	188
+p1:L2	Alte Rezepte - neu entdeckt
+p1:L3	Aus Großmutter
+p1:L4	Josefines handgeschrie-
+p1:L5	benem Kochbuch -
+p1:L6	Anno 1887
+p1:L7	[drawing] Rosi-
+p1:L8	[drawing] nen
+p1:L9	[drawing] Essig
+p1:L10	Sauerbraten
+p1:L11	Hierzu eignen sich am besten die festen Bra-
+p1:L12	tenstücke.
+p1:L13	Zum Einlegen kocht man 1/2 l Essig, 1/2 l
+p1:L14	Wasser, 4 in Scheiben geschnittene Zwiebeln,
+p1:L15	Pfeffer, Nelken, Salz und Lorbeerblätter.
+p2:L1	189
+p2:L2	Will man den Braten nach dem 1. Tag oder
+p2:L3	2. Tag gebrauchen, so gießt man das Essig-
+p2:L4	wasser heiß darüber. Soll der Braten erst
+p2:L5	nach 8 Tagen zubereitet werden, so gießt man
+p2:L6	es kalt darauf.
+p2:L7	Zum Anbraten den Speck auslassen, Butter
+p2:L8	dazugeben, dann gibt man den abgetrockne-
+p2:L9	ten Braten ins heiße Fett. Wenn er von al-
+p2:L10	len Seiten knusprig angebraten ist, gießt man
+p2:L11	etwas Essigwasser hinzu.
+p2:L12	Auch kann man einige Äpfel, Möhren und
+p2:L13	Wacholderbeeren in den Topf geben. Man läßt
+p2:L14	den Braten langsam mit den Zutaten gar-
+p2:L15	brötscheln.
+p2:L16	Für die Soße schwitzt man den Bratenfond
+p2:L17	mit Mehl an, füllt mit Essigwasser und Rot-
+p2:L18	wein auf, gibt dann gequollene Korinthen u.
+p2:L19	Rosinen hinzu und soviel Zucker, daß die
+p2:L20	Soße einen säuerlich-süßen Geschmack
+p2:L21	bekommt.
+p2:L22	Man legt den Braten, wenn er noch nicht ge-
+p2:L23	schnitten ist, eine Stunde vor dem Anrich-
+p2:L24	ten in die Soße, damit er den Geschmack
+p2:L25	derselben bekommt.
+p2:L26	[drawing] Korin
+p2:L27	[drawing] then
+p2:L28	[drawing] Rotwein

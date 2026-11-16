@@ -1,0 +1,262 @@
+[
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "i1",
+    "field": "ingredient",
+    "before": "peito de frango",
+    "after": "pedaços de soja",
+    "reason": "plant-based protein; stand-in: soy chunks",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "i4",
+    "field": "ingredient",
+    "before": "manteiga",
+    "after": "gordura vegetal",
+    "reason": "plant-based fat; stand-in: vegan butter",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "i8",
+    "field": "ingredient",
+    "before": "molho inglês",
+    "after": "condimento fermentado",
+    "reason": "plant-based savory sauce; stand-in: vegan Worcestershire sauce",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "i9",
+    "field": "ingredient",
+    "before": "creme de leite",
+    "after": "creme vegetal",
+    "reason": "plant-based cream; stand-in: plant cream",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "step 1",
+    "field": "text",
+    "before": "Em uma tigela, tempere os cubos de frango com sal, pimenta-do-reino e o alho picado. Misture bem para pegar o sabor.",
+    "after": "Em uma tigela, tempere os pedaços de soja com sal, pimenta-do-reino e o alho picado. Misture bem para pegar o sabor.",
+    "reason": "rewritten to match the vegan ingredients; its numbers are unchanged",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "step 2",
+    "field": "text",
+    "before": "Em uma panela grande, derreta a manteiga em fogo m dio-alto. Adicione o frango em cubos, espalhando bem pela panela, e deixe dourar. Mexa apenas de vez em quando para que ele sele e fique suculento, sem soltar muita gua.",
+    "after": "Em uma panela grande, aqueça a gordura vegetal em fogo médio-alto. Adicione os pedaços de soja em cubos, espalhando bem pela panela, e deixe dourar. Mexa apenas de vez em quando para que ele sele e fique suculento, sem soltar muita água.",
+    "reason": "rewritten to match the vegan ingredients; its numbers are unchanged",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "step 3",
+    "field": "text",
+    "before": "Quando o frango estiver douradinho, adicione a cebola picada na mesma panela e refogue at que ela fique transparente e macia.",
+    "after": "Quando os pedaços de soja estiverem douradinhos, adicione a cebola picada na mesma panela e refogue até que ela fique transparente e macia.",
+    "reason": "rewritten to match the vegan ingredients; its numbers are unchanged",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "step 4",
+    "field": "text",
+    "before": "Acrescente o ketchup, a mostarda e o molho ingl s. Misture tudo muito bem com o frango e a cebola por cerca de 1 minuto para apurar os sabores.",
+    "after": "Acrescente o ketchup, a mostarda e o condimento fermentado. Misture tudo muito bem com os pedaços de soja e a cebola por cerca de 1 minuto para apurar os sabores.",
+    "reason": "rewritten to match the vegan ingredients; its numbers are unchanged",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "step 5",
+    "field": "text",
+    "before": "Abaixe o fogo para o m nimo. Adicione o creme de leite e mexa delicadamente at incorporar e aquecer bem. Dica importante: n o deixe o creme de leite ferver para que ele n o talhe. Ajuste o sal se necess rio.",
+    "after": "Abaixe o fogo para o mínimo. Adicione o creme vegetal e mexa delicadamente até incorporar e aquecer bem. Dica importante: não deixe o creme vegetal ferver para que ele não talhe. Ajuste o sal se necessário.",
+    "reason": "rewritten to match the vegan ingredients; its numbers are unchanged",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "warning",
+    "target": "recipe",
+    "field": "stand-ins",
+    "before": null,
+    "after": "peito de frango → pedaços de soja",
+    "reason": "A plant-based stand-in for meat or fish differs in texture, flavour and cooking time. Times are left as written: taste and adjust.",
+    "severity": "medium"
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "unchanged",
+    "target": "ingredients",
+    "field": "kept",
+    "before": null,
+    "after": "cebola, alho, azeite, ketchup, mostarda, Sal, pimenta-do-reino, Cheiro-verde",
+    "reason": "no animal product found in these (wine, beer, sugar and vinegar are not treated)",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "warning",
+    "target": "servings",
+    "field": "base",
+    "before": "4",
+    "after": "4",
+    "reason": "the recipe does not say how many it serves: 4 is an estimate (Based on 500g of chicken and standard ingredient ratios for a main dish.). Every amount below rests on it; give the real number to correct them.",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "servings",
+    "field": "servings",
+    "before": "4",
+    "after": "6",
+    "reason": "servings changed from 4 to 6: every amount is multiplied by 1.5, except as noted",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "i1",
+    "field": "quantity",
+    "before": "500 g",
+    "after": "750 g",
+    "reason": "scaled by 1.5",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "i2",
+    "field": "quantity",
+    "before": "1",
+    "after": "2",
+    "reason": "scaled by 1.5 (exactly 1.5, rounded to 2)",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "warning",
+    "target": "i2",
+    "field": "quantity",
+    "before": "1.50",
+    "after": "2",
+    "reason": "the exact amount is 1.50, but cebola comes in whole pieces: shown as 2",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "i3",
+    "field": "quantity",
+    "before": "2 dentes",
+    "after": "3 dentes",
+    "reason": "scaled by 1.5",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "i4",
+    "field": "quantity",
+    "before": "2 colheres (sopa)",
+    "after": "3 colheres (sopa)",
+    "reason": "scaled by 1.5",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "i6",
+    "field": "quantity",
+    "before": "2 colheres (sopa)",
+    "after": "3 colheres (sopa)",
+    "reason": "scaled by 1.5",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "i7",
+    "field": "quantity",
+    "before": "1 colher (sopa)",
+    "after": "1 1/2 colher (sopa)",
+    "reason": "seasoning: scaled by 1.5 ** 0.8 = 1.38, because seasoning grows more slowly than volume; taste and adjust (exactly 1.38, rounded to 1 1/2)",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "i8",
+    "field": "quantity",
+    "before": "1 a 2 colheres (sopa)",
+    "after": "1 1/2-3 colheres (sopa)",
+    "reason": "scaled by 1.5",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "i9",
+    "field": "quantity",
+    "before": "1 caixinha (200g)",
+    "after": "2 caixinha (200g)",
+    "reason": "scaled by 1.5 (exactly 1.5, rounded to 2)",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "warning",
+    "target": "i9",
+    "field": "quantity",
+    "before": "1.50",
+    "after": "2",
+    "reason": "the exact amount is 1.50, but creme vegetal comes in whole pieces: shown as 2",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "unchanged",
+    "target": "step 4",
+    "field": "duration",
+    "before": "cerca de 1 minuto",
+    "after": "cerca de 1 minuto",
+    "reason": "a time does not grow with the amount: check for doneness",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "warning",
+    "target": "t1",
+    "field": "size",
+    "before": "tigela",
+    "after": "tigela",
+    "reason": "6 servings instead of 4: you may need a bigger tigela",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "warning",
+    "target": "t2",
+    "field": "size",
+    "before": "panela grande",
+    "after": "panela grande",
+    "reason": "6 servings instead of 4: you may need a bigger panela grande",
+    "severity": null
+  }
+]

@@ -1,0 +1,316 @@
+{
+  "title": "Strogonoff",
+  "language": "pt",
+  "servings": {
+    "value": 4,
+    "stated": false,
+    "basis": "Based on 500g of chicken and standard ingredient ratios for a main dish.",
+    "quote": null,
+    "lines": []
+  },
+  "ingredients": [
+    {
+      "id": "i1",
+      "name": "pedaços de soja",
+      "name_en": "soy chunks",
+      "quantity": 500.0,
+      "quantity_text": "500",
+      "unit": "g",
+      "prep_note": "cortado em cubos pequenos",
+      "optional": false,
+      "quote": "500g de peito de frango cortado em cubos pequenos",
+      "lines": [
+        "p1:L4"
+      ]
+    },
+    {
+      "id": "i2",
+      "name": "cebola",
+      "name_en": "onion",
+      "quantity": 1.0,
+      "quantity_text": "1",
+      "unit": null,
+      "prep_note": "média picadinha",
+      "optional": false,
+      "quote": "1 cebola média picadinha",
+      "lines": [
+        "p1:L5"
+      ]
+    },
+    {
+      "id": "i3",
+      "name": "alho",
+      "name_en": "garlic",
+      "quantity": 2.0,
+      "quantity_text": "2",
+      "unit": "dentes",
+      "prep_note": "picados",
+      "optional": false,
+      "quote": "2 dentes de alho picados",
+      "lines": [
+        "p1:L6"
+      ]
+    },
+    {
+      "id": "i4",
+      "name": "gordura vegetal",
+      "name_en": "vegan butter",
+      "quantity": 2.0,
+      "quantity_text": "2",
+      "unit": "colheres (sopa)",
+      "prep_note": null,
+      "optional": false,
+      "quote": "2 colheres (sopa) de manteiga",
+      "lines": [
+        "p1:L7"
+      ]
+    },
+    {
+      "id": "i5",
+      "name": "azeite",
+      "name_en": "olive oil",
+      "quantity": null,
+      "quantity_text": null,
+      "unit": null,
+      "prep_note": null,
+      "optional": true,
+      "quote": "(ou azeite)",
+      "lines": [
+        "p1:L7"
+      ]
+    },
+    {
+      "id": "i6",
+      "name": "ketchup",
+      "name_en": "ketchup",
+      "quantity": 2.0,
+      "quantity_text": "2",
+      "unit": "colheres (sopa)",
+      "prep_note": null,
+      "optional": false,
+      "quote": "2 colheres (sopa) de ketchup",
+      "lines": [
+        "p1:L8"
+      ]
+    },
+    {
+      "id": "i7",
+      "name": "mostarda",
+      "name_en": "mustard",
+      "quantity": 1.0,
+      "quantity_text": "1",
+      "unit": "colher (sopa)",
+      "prep_note": null,
+      "optional": false,
+      "quote": "1 colher (sopa) de mostarda",
+      "lines": [
+        "p1:L9"
+      ]
+    },
+    {
+      "id": "i8",
+      "name": "condimento fermentado",
+      "name_en": "vegan Worcestershire sauce",
+      "quantity": 1.0,
+      "quantity_text": "1 a 2",
+      "unit": "colheres (sopa)",
+      "prep_note": null,
+      "optional": true,
+      "quote": "1 a 2 colheres (sopa) de molho inglês (opcional, mas dá um toque ótimo)",
+      "lines": [
+        "p1:L10"
+      ]
+    },
+    {
+      "id": "i9",
+      "name": "creme vegetal",
+      "name_en": "plant cream",
+      "quantity": 1.0,
+      "quantity_text": "1",
+      "unit": "caixinha (200g)",
+      "prep_note": "com soro ou fresco",
+      "optional": false,
+      "quote": "1 caixinha (200g) de creme de leite (com soro ou fresco)",
+      "lines": [
+        "p1:L11"
+      ]
+    },
+    {
+      "id": "i10",
+      "name": "Sal",
+      "name_en": "salt",
+      "quantity": null,
+      "quantity_text": null,
+      "unit": null,
+      "prep_note": null,
+      "optional": false,
+      "quote": "Sal e pimenta-do-reino a gosto",
+      "lines": [
+        "p1:L12"
+      ]
+    },
+    {
+      "id": "i11",
+      "name": "pimenta-do-reino",
+      "name_en": "black pepper",
+      "quantity": null,
+      "quantity_text": null,
+      "unit": null,
+      "prep_note": null,
+      "optional": false,
+      "quote": "Sal e pimenta-do-reino a gosto",
+      "lines": [
+        "p1:L12"
+      ]
+    },
+    {
+      "id": "i12",
+      "name": "Cheiro-verde",
+      "name_en": "parsley/scallions",
+      "quantity": null,
+      "quantity_text": null,
+      "unit": null,
+      "prep_note": "picado",
+      "optional": false,
+      "quote": "Cheiro-verde picado a gosto para finalizar",
+      "lines": [
+        "p1:L13"
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "id": "t1",
+      "name": "tigela",
+      "name_en": "bowl",
+      "implied": false,
+      "quote": "tigela",
+      "lines": [
+        "p1:L16"
+      ]
+    },
+    {
+      "id": "t2",
+      "name": "panela grande",
+      "name_en": "large pot",
+      "implied": false,
+      "quote": "panela grande",
+      "lines": [
+        "p1:L19"
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "n": 1,
+      "text": "Em uma tigela, tempere os pedaços de soja com sal, pimenta-do-reino e o alho picado. Misture bem para pegar o sabor.",
+      "ingredient_ids": [
+        "i1",
+        "i10",
+        "i11",
+        "i3"
+      ],
+      "tool_ids": [
+        "t1"
+      ],
+      "duration_text": null,
+      "condition": null,
+      "quote": "Em uma tigela, tempere os cubos de frango com sal, pimenta-do-reino e o alho picado. Misture bem\npara pegar o sabor.",
+      "lines": [
+        "p1:L16",
+        "p1:L17"
+      ]
+    },
+    {
+      "n": 2,
+      "text": "Em uma panela grande, aqueça a gordura vegetal em fogo médio-alto. Adicione os pedaços de soja em cubos, espalhando bem pela panela, e deixe dourar. Mexa apenas de vez em quando para que ele sele e fique suculento, sem soltar muita água.",
+      "ingredient_ids": [
+        "i4",
+        "i1"
+      ],
+      "tool_ids": [
+        "t2"
+      ],
+      "duration_text": null,
+      "condition": null,
+      "quote": "Em uma panela grande, derreta a manteiga em fogo m dio-alto. Adicione o frango em cubos, \né\nespalhando bem pela panela, e deixe dourar. Mexa apenas de vez em quando para que ele sele e fique\nsuculento, sem soltar muita gua.\ná",
+      "lines": [
+        "p1:L19",
+        "p1:L20",
+        "p1:L21",
+        "p1:L22",
+        "p1:L23"
+      ]
+    },
+    {
+      "n": 3,
+      "text": "Quando os pedaços de soja estiverem douradinhos, adicione a cebola picada na mesma panela e refogue até que ela fique transparente e macia.",
+      "ingredient_ids": [
+        "i1",
+        "i2"
+      ],
+      "tool_ids": [
+        "t2"
+      ],
+      "duration_text": null,
+      "condition": "Quando o frango estiver douradinho",
+      "quote": "Quando o frango estiver douradinho, adicione a cebola picada na mesma panela e refogue at  que ela\nfique transparente e macia.",
+      "lines": [
+        "p2:L2",
+        "p2:L3"
+      ]
+    },
+    {
+      "n": 4,
+      "text": "Acrescente o ketchup, a mostarda e o condimento fermentado. Misture tudo muito bem com os pedaços de soja e a cebola por cerca de 1 minuto para apurar os sabores.",
+      "ingredient_ids": [
+        "i6",
+        "i7",
+        "i8",
+        "i1",
+        "i2"
+      ],
+      "tool_ids": [],
+      "duration_text": "cerca de 1 minuto",
+      "condition": null,
+      "quote": "Acrescente o ketchup, a mostarda e o molho ingl  s. Misture tudo muito bem com o frango e a cebola\npor cerca de 1 minuto para apurar os sabores.",
+      "lines": [
+        "p2:L5",
+        "p2:L6"
+      ]
+    },
+    {
+      "n": 5,
+      "text": "Abaixe o fogo para o mínimo. Adicione o creme vegetal e mexa delicadamente até incorporar e aquecer bem. Dica importante: não deixe o creme vegetal ferver para que ele não talhe. Ajuste o sal se necessário.",
+      "ingredient_ids": [
+        "i9",
+        "i10"
+      ],
+      "tool_ids": [],
+      "duration_text": null,
+      "condition": "n o deixe o creme de leite ferver",
+      "quote": "Abaixe o fogo para o m nimo. Adicione o creme de leite e mexa delicadamente at  incorporar e aquecer\nbem. Dica importante: n o deixe o creme de leite ferver para que ele n o talhe. Ajuste o sal se\nnecess rio.",
+      "lines": [
+        "p2:L8",
+        "p2:L9",
+        "p2:L10"
+      ]
+    },
+    {
+      "n": 6,
+      "text": "Desligue o fogo, polvilhe o cheiro-verde picado por cima e sirva imediatamente acompanhado de arroz branco e batata palha.",
+      "ingredient_ids": [
+        "i12"
+      ],
+      "tool_ids": [],
+      "duration_text": null,
+      "condition": null,
+      "quote": "Desligue o fogo, polvilhe o cheiro-verde picado por cima e sirva imediatamente acompanhado de arroz\nbranco e batata palha.",
+      "lines": [
+        "p2:L11",
+        "p2:L12",
+        "p2:L13"
+      ]
+    }
+  ]
+}

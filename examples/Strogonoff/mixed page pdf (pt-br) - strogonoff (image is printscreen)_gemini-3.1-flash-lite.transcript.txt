@@ -1,0 +1,36 @@
+p1:L1	[from image, page 1]
+p1:L2	Ingredientes
+p1:L3	Para o Strogonoff:
+p1:L4	• 500g de peito de frango cortado em cubos pequenos
+p1:L5	• 1 cebola média picadinha
+p1:L6	• 2 dentes de alho picados
+p1:L7	• 2 colheres (sopa) de manteiga (ou azeite)
+p1:L8	• 2 colheres (sopa) de ketchup
+p1:L9	• 1 colher (sopa) de mostarda
+p1:L10	• 1 a 2 colheres (sopa) de molho inglês (opcional, mas dá um toque ótimo)
+p1:L11	• 1 caixinha (200g) de creme de leite (com soro ou fresco)
+p1:L12	• Sal e pimenta-do-reino a gosto
+p1:L13	• Cheiro-verde picado a gosto para finalizar
+p1:L14	Modo de Preparo
+p1:L15	1.Temperar o Frango:
+p1:L16	Em uma tigela, tempere os cubos de frango com sal, pimenta-do-reino e o alho picado. Misture bem
+p1:L17	para pegar o sabor.
+p1:L18	2.Dourar o Frango:
+p1:L19	Em uma panela grande, derreta a manteiga em fogo m dio-alto. Adicione o frango em cubos, 
+p1:L20	é
+p1:L21	espalhando bem pela panela, e deixe dourar. Mexa apenas de vez em quando para que ele sele e fique
+p1:L22	suculento, sem soltar muita gua.
+p1:L23	á
+p2:L1	3.Refogar a Cebola:
+p2:L2	                                                                      éQuando o frango estiver douradinho, adicione a cebola picada na mesma panela e refogue at  que ela
+p2:L3	fique transparente e macia.
+p2:L4	4.Adicionar os Molhos:
+p2:L5	                                     êAcrescente o ketchup, a mostarda e o molho ingl  s. Misture tudo muito bem com o frango e a cebola
+p2:L6	por cerca de 1 minuto para apurar os sabores.
+p2:L7	5.Entrar com o Creme de Leite:
+p2:L8	                                       í                                            éAbaixe o fogo para o m nimo. Adicione o creme de leite e mexa delicadamente at  incorporar e aquecer
+p2:L9	                   ã                                   ãbem. Dica importante: n o deixe o creme de leite ferver para que ele n o talhe. Ajuste o sal se
+p2:L10	     ánecess rio.
+p2:L11	6.Finalizar e Servir:
+p2:L12	Desligue o fogo, polvilhe o cheiro-verde picado por cima e sirva imediatamente acompanhado de arroz
+p2:L13	branco e batata palha.

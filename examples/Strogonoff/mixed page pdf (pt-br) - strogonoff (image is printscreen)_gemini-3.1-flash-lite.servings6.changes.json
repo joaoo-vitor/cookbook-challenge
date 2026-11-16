@@ -1,0 +1,152 @@
+[
+  {
+    "rule": "scale_servings",
+    "kind": "warning",
+    "target": "servings",
+    "field": "base",
+    "before": "4",
+    "after": "4",
+    "reason": "the recipe does not say how many it serves: 4 is an estimate (Based on 500g of chicken and standard ingredient ratios for a main dish.). Every amount below rests on it; give the real number to correct them.",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "servings",
+    "field": "servings",
+    "before": "4",
+    "after": "6",
+    "reason": "servings changed from 4 to 6: every amount is multiplied by 1.5, except as noted",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "i1",
+    "field": "quantity",
+    "before": "500 g",
+    "after": "750 g",
+    "reason": "scaled by 1.5",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "i2",
+    "field": "quantity",
+    "before": "1",
+    "after": "2",
+    "reason": "scaled by 1.5 (exactly 1.5, rounded to 2)",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "warning",
+    "target": "i2",
+    "field": "quantity",
+    "before": "1.50",
+    "after": "2",
+    "reason": "the exact amount is 1.50, but cebola comes in whole pieces: shown as 2",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "i3",
+    "field": "quantity",
+    "before": "2 dentes",
+    "after": "3 dentes",
+    "reason": "scaled by 1.5",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "i4",
+    "field": "quantity",
+    "before": "2 colheres (sopa)",
+    "after": "3 colheres (sopa)",
+    "reason": "scaled by 1.5",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "i6",
+    "field": "quantity",
+    "before": "2 colheres (sopa)",
+    "after": "3 colheres (sopa)",
+    "reason": "scaled by 1.5",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "i7",
+    "field": "quantity",
+    "before": "1 colher (sopa)",
+    "after": "1 1/2 colher (sopa)",
+    "reason": "seasoning: scaled by 1.5 ** 0.8 = 1.38, because seasoning grows more slowly than volume; taste and adjust (exactly 1.38, rounded to 1 1/2)",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "i8",
+    "field": "quantity",
+    "before": "1 a 2 colheres (sopa)",
+    "after": "1 1/2-3 colheres (sopa)",
+    "reason": "scaled by 1.5",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "i9",
+    "field": "quantity",
+    "before": "1 caixinha (200g)",
+    "after": "2 caixinha (200g)",
+    "reason": "scaled by 1.5 (exactly 1.5, rounded to 2)",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "warning",
+    "target": "i9",
+    "field": "quantity",
+    "before": "1.50",
+    "after": "2",
+    "reason": "the exact amount is 1.50, but creme de leite comes in whole pieces: shown as 2",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "unchanged",
+    "target": "step 4",
+    "field": "duration",
+    "before": "cerca de 1 minuto",
+    "after": "cerca de 1 minuto",
+    "reason": "a time does not grow with the amount: check for doneness",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "warning",
+    "target": "t1",
+    "field": "size",
+    "before": "tigela",
+    "after": "tigela",
+    "reason": "6 servings instead of 4: you may need a bigger tigela",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "warning",
+    "target": "t2",
+    "field": "size",
+    "before": "panela grande",
+    "after": "panela grande",
+    "reason": "6 servings instead of 4: you may need a bigger panela grande",
+    "severity": null
+  }
+]

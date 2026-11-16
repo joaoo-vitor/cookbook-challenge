@@ -1,0 +1,92 @@
+[
+  {
+    "rule": "scale_servings",
+    "kind": "warning",
+    "target": "servings",
+    "field": "base",
+    "before": "4",
+    "after": "4",
+    "reason": "the recipe does not say how many it serves: 4 is an estimate (The recipe uses a significant amount of liquid (1 liter total) and multiple vegetables/additions, typical for a roast serving 4 people.). Every amount below rests on it; give the real number to correct them.",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "servings",
+    "field": "servings",
+    "before": "4",
+    "after": "6",
+    "reason": "servings changed from 4 to 6: every amount is multiplied by 1.5, except as noted",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "i1",
+    "field": "quantity",
+    "before": "1/2 l",
+    "after": "3/4 l",
+    "reason": "scaled by 1.5",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "i2",
+    "field": "quantity",
+    "before": "1/2 l",
+    "after": "3/4 l",
+    "reason": "scaled by 1.5",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "i3",
+    "field": "quantity",
+    "before": "4",
+    "after": "6",
+    "reason": "scaled by 1.5",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "unchanged",
+    "target": "i18",
+    "field": "quantity",
+    "before": "soviel",
+    "after": "soviel",
+    "reason": "the amount is vague ('soviel'): left as written",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "step 1",
+    "field": "text",
+    "before": "Zum Einlegen kocht man 1/2 l Essig, 1/2 l Wasser, 4 in Scheiben geschnittene Zwiebeln, Pfeffer, Nelken, Salz und Lorbeerblätter.",
+    "after": "Zum Einlegen kocht man 3/4 l Essig, 3/4 l Wasser, 6 in Scheiben geschnittene Zwiebeln, Pfeffer, Nelken, Salz und Lorbeerblätter.",
+    "reason": "the amounts of Essig, Wasser, Zwiebeln in the text follow the new amounts",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "unchanged",
+    "target": "step 8",
+    "field": "duration",
+    "before": "eine Stunde",
+    "after": "eine Stunde",
+    "reason": "a time does not grow with the amount: check for doneness",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "warning",
+    "target": "t1",
+    "field": "size",
+    "before": "Topf",
+    "after": "Topf",
+    "reason": "6 servings instead of 4: you may need a bigger Topf",
+    "severity": null
+  }
+]

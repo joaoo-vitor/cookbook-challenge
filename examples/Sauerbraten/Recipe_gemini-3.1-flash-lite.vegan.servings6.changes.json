@@ -1,0 +1,202 @@
+[
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "i8",
+    "field": "ingredient",
+    "before": "Speck",
+    "after": "Räuchertofu",
+    "reason": "plant-based protein; stand-in: smoked tofu",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "i9",
+    "field": "ingredient",
+    "before": "Butter",
+    "after": "vegane Butter",
+    "reason": "plant-based fat; stand-in: vegan butter",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "i10",
+    "field": "ingredient",
+    "before": "Braten",
+    "after": "Seitan",
+    "reason": "plant-based protein; stand-in: seitan",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "step 2",
+    "field": "text",
+    "before": "Will man den Braten nach dem 1. Tag oder 2. Tag gebrauchen, so gießt man das Essigwasser heiß darüber. Soll der Braten erst nach 8 Tagen zubereitet werden, so gießt man es kalt darauf.",
+    "after": "Will man den Seitan nach dem 1. Tag oder 2. Tag gebrauchen, so gießt man das Essigwasser heiß darüber. Soll der Seitan erst nach 8 Tagen zubereitet werden, so gießt man es kalt darauf.",
+    "reason": "rewritten to match the vegan ingredients; its numbers are unchanged",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "step 3",
+    "field": "text",
+    "before": "Zum Anbraten den Speck auslassen, Butter dazugeben, dann gibt man den abgetrockneten Braten ins heiße Fett.",
+    "after": "Zum Anbraten den Räuchertofu anbraten, vegane Butter dazugeben, dann gibt man den abgetrockneten Seitan ins heiße Fett.",
+    "reason": "rewritten to match the vegan ingredients; its numbers are unchanged",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "step 6",
+    "field": "text",
+    "before": "Man läßt den Braten langsam mit den Zutaten garbrötscheln.",
+    "after": "Man läßt den Seitan langsam mit den Zutaten garbrötscheln.",
+    "reason": "rewritten to match the vegan ingredients; its numbers are unchanged",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "step 7",
+    "field": "text",
+    "before": "Für die Soße schwitzt man den Bratenfond mit Mehl an, füllt mit Essigwasser und Rotwein auf, gibt dann gequollene Korinthen u. Rosinen hinzu und soviel Zucker, daß die Soße einen säuerlich-süßen Geschmack bekommt.",
+    "after": "Für die Soße schwitzt man den Sud mit Mehl an, füllt mit Essigwasser und Rotwein auf, gibt dann gequollene Korinthen u. Rosinen hinzu und soviel Zucker, daß die Soße einen säuerlich-süßen Geschmack bekommt.",
+    "reason": "rewritten to match the vegan ingredients; its numbers are unchanged",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "warning",
+    "target": "step 7",
+    "field": "text",
+    "before": "bratenfond",
+    "after": null,
+    "reason": "'bratenfond' comes from the animal ingredient. The rewrite replaces it: check that it makes sense.",
+    "severity": "medium"
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "step 8",
+    "field": "text",
+    "before": "Man legt den Braten, wenn er noch nicht geschnitten ist, eine Stunde vor dem Anrichten in die Soße, damit er den Geschmack derselben bekommt.",
+    "after": "Man legt den Seitan, wenn er noch nicht geschnitten ist, eine Stunde vor dem Anrichten in die Soße, damit er den Geschmack derselben bekommt.",
+    "reason": "rewritten to match the vegan ingredients; its numbers are unchanged",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "warning",
+    "target": "recipe",
+    "field": "stand-ins",
+    "before": null,
+    "after": "Speck → Räuchertofu; Braten → Seitan",
+    "reason": "A plant-based stand-in for meat or fish differs in texture, flavour and cooking time. Times are left as written: taste and adjust.",
+    "severity": "medium"
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "unchanged",
+    "target": "ingredients",
+    "field": "kept",
+    "before": null,
+    "after": "Essig, Wasser, Zwiebeln, Pfeffer, Nelken, Salz, Lorbeerblätter, Äpfel, Möhren, Wacholderbeeren, Mehl, Rotwein, Korinthen, Rosinen, Zucker",
+    "reason": "no animal product found in these (wine, beer, sugar and vinegar are not treated)",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "warning",
+    "target": "servings",
+    "field": "base",
+    "before": "4",
+    "after": "4",
+    "reason": "the recipe does not say how many it serves: 4 is an estimate (The recipe uses a significant amount of liquid (1 liter total) and multiple vegetables/additions, typical for a roast serving 4 people.). Every amount below rests on it; give the real number to correct them.",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "servings",
+    "field": "servings",
+    "before": "4",
+    "after": "6",
+    "reason": "servings changed from 4 to 6: every amount is multiplied by 1.5, except as noted",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "i1",
+    "field": "quantity",
+    "before": "1/2 l",
+    "after": "3/4 l",
+    "reason": "scaled by 1.5",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "i2",
+    "field": "quantity",
+    "before": "1/2 l",
+    "after": "3/4 l",
+    "reason": "scaled by 1.5",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "i3",
+    "field": "quantity",
+    "before": "4",
+    "after": "6",
+    "reason": "scaled by 1.5",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "unchanged",
+    "target": "i18",
+    "field": "quantity",
+    "before": "soviel",
+    "after": "soviel",
+    "reason": "the amount is vague ('soviel'): left as written",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "changed",
+    "target": "step 1",
+    "field": "text",
+    "before": "Zum Einlegen kocht man 1/2 l Essig, 1/2 l Wasser, 4 in Scheiben geschnittene Zwiebeln, Pfeffer, Nelken, Salz und Lorbeerblätter.",
+    "after": "Zum Einlegen kocht man 3/4 l Essig, 3/4 l Wasser, 6 in Scheiben geschnittene Zwiebeln, Pfeffer, Nelken, Salz und Lorbeerblätter.",
+    "reason": "the amounts of Essig, Wasser, Zwiebeln in the text follow the new amounts",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "unchanged",
+    "target": "step 8",
+    "field": "duration",
+    "before": "eine Stunde",
+    "after": "eine Stunde",
+    "reason": "a time does not grow with the amount: check for doneness",
+    "severity": null
+  },
+  {
+    "rule": "scale_servings",
+    "kind": "warning",
+    "target": "t1",
+    "field": "size",
+    "before": "Topf",
+    "after": "Topf",
+    "reason": "6 servings instead of 4: you may need a bigger Topf",
+    "severity": null
+  }
+]

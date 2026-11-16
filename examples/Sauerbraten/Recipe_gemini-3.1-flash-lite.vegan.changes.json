@@ -1,0 +1,112 @@
+[
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "i8",
+    "field": "ingredient",
+    "before": "Speck",
+    "after": "Räuchertofu",
+    "reason": "plant-based protein; stand-in: smoked tofu",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "i9",
+    "field": "ingredient",
+    "before": "Butter",
+    "after": "vegane Butter",
+    "reason": "plant-based fat; stand-in: vegan butter",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "i10",
+    "field": "ingredient",
+    "before": "Braten",
+    "after": "Seitan",
+    "reason": "plant-based protein; stand-in: seitan",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "step 2",
+    "field": "text",
+    "before": "Will man den Braten nach dem 1. Tag oder 2. Tag gebrauchen, so gießt man das Essigwasser heiß darüber. Soll der Braten erst nach 8 Tagen zubereitet werden, so gießt man es kalt darauf.",
+    "after": "Will man den Seitan nach dem 1. Tag oder 2. Tag gebrauchen, so gießt man das Essigwasser heiß darüber. Soll der Seitan erst nach 8 Tagen zubereitet werden, so gießt man es kalt darauf.",
+    "reason": "rewritten to match the vegan ingredients; its numbers are unchanged",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "step 3",
+    "field": "text",
+    "before": "Zum Anbraten den Speck auslassen, Butter dazugeben, dann gibt man den abgetrockneten Braten ins heiße Fett.",
+    "after": "Zum Anbraten den Räuchertofu anbraten, vegane Butter dazugeben, dann gibt man den abgetrockneten Seitan ins heiße Fett.",
+    "reason": "rewritten to match the vegan ingredients; its numbers are unchanged",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "step 6",
+    "field": "text",
+    "before": "Man läßt den Braten langsam mit den Zutaten garbrötscheln.",
+    "after": "Man läßt den Seitan langsam mit den Zutaten garbrötscheln.",
+    "reason": "rewritten to match the vegan ingredients; its numbers are unchanged",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "step 7",
+    "field": "text",
+    "before": "Für die Soße schwitzt man den Bratenfond mit Mehl an, füllt mit Essigwasser und Rotwein auf, gibt dann gequollene Korinthen u. Rosinen hinzu und soviel Zucker, daß die Soße einen säuerlich-süßen Geschmack bekommt.",
+    "after": "Für die Soße schwitzt man den Sud mit Mehl an, füllt mit Essigwasser und Rotwein auf, gibt dann gequollene Korinthen u. Rosinen hinzu und soviel Zucker, daß die Soße einen säuerlich-süßen Geschmack bekommt.",
+    "reason": "rewritten to match the vegan ingredients; its numbers are unchanged",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "warning",
+    "target": "step 7",
+    "field": "text",
+    "before": "bratenfond",
+    "after": null,
+    "reason": "'bratenfond' comes from the animal ingredient. The rewrite replaces it: check that it makes sense.",
+    "severity": "medium"
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "changed",
+    "target": "step 8",
+    "field": "text",
+    "before": "Man legt den Braten, wenn er noch nicht geschnitten ist, eine Stunde vor dem Anrichten in die Soße, damit er den Geschmack derselben bekommt.",
+    "after": "Man legt den Seitan, wenn er noch nicht geschnitten ist, eine Stunde vor dem Anrichten in die Soße, damit er den Geschmack derselben bekommt.",
+    "reason": "rewritten to match the vegan ingredients; its numbers are unchanged",
+    "severity": null
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "warning",
+    "target": "recipe",
+    "field": "stand-ins",
+    "before": null,
+    "after": "Speck → Räuchertofu; Braten → Seitan",
+    "reason": "A plant-based stand-in for meat or fish differs in texture, flavour and cooking time. Times are left as written: taste and adjust.",
+    "severity": "medium"
+  },
+  {
+    "rule": "make_vegan",
+    "kind": "unchanged",
+    "target": "ingredients",
+    "field": "kept",
+    "before": null,
+    "after": "Essig, Wasser, Zwiebeln, Pfeffer, Nelken, Salz, Lorbeerblätter, Äpfel, Möhren, Wacholderbeeren, Mehl, Rotwein, Korinthen, Rosinen, Zucker",
+    "reason": "no animal product found in these (wine, beer, sugar and vinegar are not treated)",
+    "severity": null
+  }
+]
