@@ -3,18 +3,6 @@
 A pipeline that turns a scanned or typed recipe into structured data you can scale and make vegan.
 Built for the finlyt engineering case study. Stages: **ingest, extract, manipulate, output**.
 
-## Status
-
-| Stage | What it does | Status | Guide |
-|---|---|---|---|
-| Ingest | Detects what came in (PDF, image or plain text, by its first bytes) and decides, per page, how to read it (text layer, OCR layer, or vision model) | Built | [ingest.md](ingest.md) |
-| Extract | Transcribes pages with two vision models and flags where they disagree, fills a structured recipe (ingredients, tools, steps, servings) and checks it | Built | [extract.md](extract.md) |
-| Manipulate | Change servings, make vegan; combinable, in a fixed order, every change logged with its reason | Built | [manipulate.md](manipulate.md) |
-| Web page | Upload, check the text, check the recipe, change it | Built | [web.md](web.md) |
-| Output | The recipe as a cook reads it: ingredients and steps as they are now, servings with how sure they are, what replaced what, what to check; Markdown | Built | [output.md](output.md) |
-
-Not built yet: `examples/` and `AI_LOG.md`.
-
 ## Setup
 
 You need Python 3.10 or newer. From the project folder:
@@ -279,28 +267,3 @@ The scripts in [evals/](evals/README.md) build degraded copies of the scan and s
 ## Debugging in VS Code
 
 Open the folder in VS Code and pick the `.venv` interpreter (Ctrl+Shift+P, "Python: Select Interpreter"). The Run and Debug panel then offers `Ingest: Recipe.pdf`, `Ingest: choose a PDF`, `Pytest: current file` and `Python: current file`.
-
-## Project layout
-
-```
-src/cookbook/
-  ingest/        decide how to read each page (pdf.py, CLI in __main__.py)
-  models.py      the structured recipe (ingredients, tools, steps, servings) and the issue type
-  units.py       parse amounts ("1/2", "ein Pfund", "einige") and convert units (Pfund, Loth, l, ...)
-  extract/       transcribe.py (two vision models), compare.py (compare the readings), transcript.py (all pages
-                 with line ids and uncertainty), structure.py (fill the schema), validate.py (the checks),
-                 CLI in __main__.py
-  manipulate/    scaling.py (the servings rule), engine.py (rules in a fixed order), changes.py (the log),
-                 CLI in __main__.py
-  output/        render.py (the recipe as Markdown for a cook), CLI in __main__.py
-  web/           app.py (routes), jobs.py (reading runs as a job), static/ (the page: plain HTML, CSS, JS)
-  llm.py         the only module that talks to a model provider (Gemini client, cache)
-tests/           offline tests
-evals/           scripts for comparing models on degraded scans
-ingest.md        how the ingest stage works, step by step
-extract.md       plan and decisions for the extract stage
-manipulate.md    how servings and vegan work, and their limits
-output.md        what the cook's recipe contains and why
-web.md           how the web page works
-.env.example     template for the API key
-```
