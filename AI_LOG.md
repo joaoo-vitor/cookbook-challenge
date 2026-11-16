@@ -1,6 +1,6 @@
 # AI log: how the code was written, and where the agent was wrong
 
-The code was written with Claude Code (the desktop app) over three days (13 to 15 November 2026). This is a record of how it was steered and, more useful, of where the agent was wrong and how that was found. Commit hashes point at the fixes. Where a mistake had no commit of its own, it says where it was caught. The models *inside* the app have their own list of failures in [extract.md](extract.md); this file is about the coding agent.
+The code was written with Claude Code (the desktop app) over four days (13 to 16 November 2026). This is a record of how it was steered and, more useful, of where the agent was wrong and how that was found. Commit hashes point at the fixes. Where a mistake had no commit of its own, it says where it was caught. The models *inside* the app have their own list of failures in [extract.md](extract.md); this file is about the coding agent.
 
 ## How I worked with it
 
@@ -44,9 +44,3 @@ The code was written with Claude Code (the desktop app) over three days (13 to 1
 - **Measuring before choosing.** The stress tests on degraded scans decided the two-reader design and showed the marker was useless; the run totals gave the cost and time numbers.
 - **Never trusting the model, and not the agent either.** The same stance as in the app: a value needs evidence, a claim needs a check, and a fix needs a test.
 - **A short loop with real documents.** The best bug reports came from my running a recipe the agent had not seen.
-
-## What I would do differently
-
-- Write the hand-made evaluation set before the first prompt, not after.
-- Look at every screen in both themes, and run each manipulation in both orders, before saying it works.
-- Read the generated documentation against the code at the end of each stage, not once at the end.
