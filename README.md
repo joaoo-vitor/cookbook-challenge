@@ -1,4 +1,4 @@
-# Cookbook challenge
+# 🍽️ Cookbook challenge
 
 A pipeline that turns a scanned or typed recipe into structured data you can scale and make vegan, and into a recipe a person can cook from.
 Built for the finlyt engineering case study. Stages: **ingest, extract, manipulate, output**.
@@ -80,99 +80,6 @@ docker compose up
 Then open http://127.0.0.1:8000. The first run builds the image. The key is not baked into it: Compose passes `.env` in when the container starts, and `.dockerignore` keeps `.env`, `data/`, PDFs and `.git` out of the build. The port is published on `127.0.0.1` only, so the page, which can use your key, is not reachable from the network. Model answers are cached in a Docker volume (`cache`), so a page read once is free to read again, also after a restart; `docker compose down -v` removes it. Stop with Ctrl+C, or `docker compose down`.
 
 Only the web page runs this way. The stage commands below (`python -m cookbook.extract` and the others) run from the virtual environment of Setup, where they read files from your folder and write into `data/`. In the container you upload through the page and download from the page.
-
-## Running each stage
-
-Each stage can be run on its own, for example to inspect one step, to produce the files of a run, or to script the pipeline. Each stage's own document ([ingest.md](ingest.md), [extract.md](extract.md), [manipulate.md](manipulate.md), [output.md](output.md)) explains how it works; this section only says how to run it. The results go into `data/`, which is gitignored.
-
-### Ingest
-
-```powershell
-python -m cookbook.ingest Recipe.pdf
-```
-
-Prints how each page of a PDF, an image or a plain text file would be read (`TEXT_DIGITAL`, `TEXT_OCR`, `VISION` or `EMPTY`), with the reasons and any extra tasks. No model is called.
-- `--show-text` also prints the text found in each page's text layer.
-- `--json` prints machine-readable output instead.
-
-### Extract
-
-First, see which models your key can use (names change often, and some are closed to new users):
-
-```powershell
-python -m cookbook.extract --list-models
-```
-
-Then read the pages, and structure the recipe:
-
-```powershell
-python -m cookbook.extract Recipe.pdf --pages 1,2 --structure
-```
-
-Options:
-- `--structure` also turns the transcript into a structured recipe and checks it. Without it only the pages are read.
-- `--pages 1,2` limits the run to those pages (1-based).
-- `--out DIR` sets the output folder. The default is `data/experiments/`.
-- `--provider gemini|claude` and `--second-provider gemini|claude` set the provider of the first and the second reader (default `gemini` for both). For example `--second-provider claude` reads every page with Gemini and with Claude Haiku.
-- `--model NAME` and `--second-model NAME` set the models. Without them: `GEMINI_MODEL` and `GEMINI_SECOND_MODEL` (or the `CLAUDE_` ones) from `.env`, then `gemini-3.1-flash-lite` and `gemini-3.5-flash-lite`. The two readers must not be the same provider and model. These names worked for our key in November 2026 and may be retired, so check `--list-models`.
-- `--fallback-models A,B` lists the models to switch to when a reader's model keeps failing (default `GEMINI_FALLBACK_MODELS`, then `gemini-3.5-flash`); `--claude-fallback-models A,B` does the same for a Claude reader (default none); `--no-fallback` never switches.
-- `--single` reads with one model only: no comparison, half the calls.
-
-Files written to the output folder, named `<file name>_<first model>`:
-- per page `_p<N>.txt` (the transcript, one line per written line with an id like `p1:L3`), `.second.txt` (the second reading), `.flags.json` (the agreement and every disagreement) and `.usage.json` (tokens, seconds and cache use);
-- per run `.run.json` (calls, cache hits, fallbacks, tokens and time, per model and in total; also printed at the end);
-- with `--structure`: `.transcript.txt` (all pages with their ids), `.recipe.json` and `.issues.json` (every issue, most serious first).
-
-The console summary shows the agreement of each page (`UNRELIABLE` if the two readings mostly disagree), each flag, and the high and medium issues. Answers are cached in `.cache/llm/`: running the same page again costs nothing and gives the same answer; delete the folder to force new calls.
-
-### Manipulate
-
-```powershell
-python -m cookbook.manipulate data/experiments/Recipe_gemini-3.1-flash-lite.recipe.json --vegan --servings 6
-```
-
-Takes the `.recipe.json` that extract wrote. Give `--vegan`, `--servings N`, or both: the rules always run in the same order (vegan, then servings).
-- `--base-servings N` says how many servings the recipe makes now, when you know better than the recipe (it replaces the recipe's own number, stated or estimated).
-- `--model NAME` sets the model that writes the vegan step texts.
-- `--out DIR` sets the output folder (default: next to the recipe).
-
-It writes `<name>[.vegan][.servingsN].recipe.json` and `.changes.json` (every change, what was left alone, and what to check by hand), and prints them. `--vegan` calls the model, like extract.
-
-### Output
-
-```powershell
-python -m cookbook.output data/experiments/Recipe_gemini-3.1-flash-lite.vegan.servings6.recipe.json
-```
-
-Writes `<name>.md` next to the recipe: the recipe as a cook would read it. It finds the change log (`<name>.changes.json`) and the original's `<name>.issues.json` next to the recipe by itself; `--issues` and `--changes` name them, `--out` sets the file. No model is called.
-
-## Try it on your own recipes
-
-Any PDF, image or text file works: put it anywhere and pass its path (in quotes if it has spaces). Keep the results inside `data/`, so a recipe from a book never ends up in git:
-
-```powershell
-python -m cookbook.extract "C:\path\to\my recipe.pdf" --structure --out data/my_tests
-```
-
-What to expect:
-- **Supported:** PDFs that are scanned or photographed, typed, or a mix; images (PNG, JPEG, GIF, TIFF, WebP), read like a scanned page; plain text files in any language (used as they are, no reading call). Any other kind of file is refused. The recipe can be in any language; amounts are checked in German, English and Portuguese (see [extract.md](extract.md)).
-- **One recipe per file.** A PDF with a whole cookbook would be merged into one wrong recipe. Pick the pages of one recipe with `--pages`, for example `--pages 12,13`.
-- **Calls and time.** A typed page needs only the structuring call (about 4 seconds). A scanned page is read by two models, then one structuring call is made (about 40 seconds for the two Sauerbraten pages the first time, under a second from the cache).
-- **Privacy.** Scanned pages (as images) and the transcript text are sent to Google. Free-tier prompts may be used for training in some regions, so do not use documents you must keep private.
-
-How to check a result. Open the files in the output folder in this order:
-1. **The console summary.** The agreement of each scanned page and each flag: a word or number the two models read differently.
-2. **`.transcript.txt`.** Read it against the page. Everything after this depends on it, and it is the one place the checks cannot verify, because they compare the recipe with the transcript, not with the page.
-3. **`.recipe.json`.** Compare it with the page: amounts and units, which ingredients are optional, the order and separation of the steps, the tools, the servings. Each item has a `quote` and the `lines` it came from.
-4. **`.issues.json`.** The problems the checks found, most serious first. `refers_to` is the ingredient ("i3"), tool, step or transcript line; [extract.md](extract.md) lists what each code means.
-
-What the checks cannot see, so look for it yourself: an ingredient the model never listed (only numbers are checked), a wrongly optional or non-optional ingredient, two steps merged into one, missing tools, and servings that are guessed.
-
-If something goes wrong:
-- `error: No Gemini API key found`: create `.env` as described under Setup.
-- A 404 for a model: its name was retired. Run `python -m cookbook.extract --list-models` and set `GEMINI_MODEL` in `.env`.
-- A 503: the command retries and may switch to a fallback model by itself; the summary says when it did.
-- `error: the model's answer is not a valid recipe`: the model returned something invalid twice in a row. Run the command again.
 
 ## Architecture overview
 
@@ -298,6 +205,99 @@ In production I would move more to code and cheaper models: the language and uni
 
 **Trust.** A reviewer sees where each value came from and how sure we are. Every value carries the quote and the lines it came from. The two models' agreement is shown for each page; each word they read differently is underlined, with both readings. The checks' warnings are coloured by severity, can be checked off, and are listed in one place; what was guessed is labelled (the servings estimate, a swapped ingredient, an amount not given). The cook's recipe repeats what still matters (⚠ and a check list) and a log says what each manipulation changed and why. See the page's [three steps](#run-the-whole-app).
 
+
+## Running each stage
+
+Each stage can be run on its own, for example to inspect one step, to produce the files of a run, or to script the pipeline. Each stage's own document ([ingest.md](ingest.md), [extract.md](extract.md), [manipulate.md](manipulate.md), [output.md](output.md)) explains how it works; this section only says how to run it. The results go into `data/`, which is gitignored.
+
+### Ingest
+
+```powershell
+python -m cookbook.ingest Recipe.pdf
+```
+
+Prints how each page of a PDF, an image or a plain text file would be read (`TEXT_DIGITAL`, `TEXT_OCR`, `VISION` or `EMPTY`), with the reasons and any extra tasks. No model is called.
+- `--show-text` also prints the text found in each page's text layer.
+- `--json` prints machine-readable output instead.
+
+### Extract
+
+First, see which models your key can use (names change often, and some are closed to new users):
+
+```powershell
+python -m cookbook.extract --list-models
+```
+
+Then read the pages, and structure the recipe:
+
+```powershell
+python -m cookbook.extract Recipe.pdf --pages 1,2 --structure
+```
+
+Options:
+- `--structure` also turns the transcript into a structured recipe and checks it. Without it only the pages are read.
+- `--pages 1,2` limits the run to those pages (1-based).
+- `--out DIR` sets the output folder. The default is `data/experiments/`.
+- `--provider gemini|claude` and `--second-provider gemini|claude` set the provider of the first and the second reader (default `gemini` for both). For example `--second-provider claude` reads every page with Gemini and with Claude Haiku.
+- `--model NAME` and `--second-model NAME` set the models. Without them: `GEMINI_MODEL` and `GEMINI_SECOND_MODEL` (or the `CLAUDE_` ones) from `.env`, then `gemini-3.1-flash-lite` and `gemini-3.5-flash-lite`. The two readers must not be the same provider and model. These names worked for our key in November 2026 and may be retired, so check `--list-models`.
+- `--fallback-models A,B` lists the models to switch to when a reader's model keeps failing (default `GEMINI_FALLBACK_MODELS`, then `gemini-3.5-flash`); `--claude-fallback-models A,B` does the same for a Claude reader (default none); `--no-fallback` never switches.
+- `--single` reads with one model only: no comparison, half the calls.
+
+Files written to the output folder, named `<file name>_<first model>`:
+- per page `_p<N>.txt` (the transcript, one line per written line with an id like `p1:L3`), `.second.txt` (the second reading), `.flags.json` (the agreement and every disagreement) and `.usage.json` (tokens, seconds and cache use);
+- per run `.run.json` (calls, cache hits, fallbacks, tokens and time, per model and in total; also printed at the end);
+- with `--structure`: `.transcript.txt` (all pages with their ids), `.recipe.json` and `.issues.json` (every issue, most serious first).
+
+The console summary shows the agreement of each page (`UNRELIABLE` if the two readings mostly disagree), each flag, and the high and medium issues. Answers are cached in `.cache/llm/`: running the same page again costs nothing and gives the same answer; delete the folder to force new calls.
+
+### Manipulate
+
+```powershell
+python -m cookbook.manipulate data/experiments/Recipe_gemini-3.1-flash-lite.recipe.json --vegan --servings 6
+```
+
+Takes the `.recipe.json` that extract wrote. Give `--vegan`, `--servings N`, or both: the rules always run in the same order (vegan, then servings).
+- `--base-servings N` says how many servings the recipe makes now, when you know better than the recipe (it replaces the recipe's own number, stated or estimated).
+- `--model NAME` sets the model that writes the vegan step texts.
+- `--out DIR` sets the output folder (default: next to the recipe).
+
+It writes `<name>[.vegan][.servingsN].recipe.json` and `.changes.json` (every change, what was left alone, and what to check by hand), and prints them. `--vegan` calls the model, like extract.
+
+### Output
+
+```powershell
+python -m cookbook.output data/experiments/Recipe_gemini-3.1-flash-lite.vegan.servings6.recipe.json
+```
+
+Writes `<name>.md` next to the recipe: the recipe as a cook would read it. It finds the change log (`<name>.changes.json`) and the original's `<name>.issues.json` next to the recipe by itself; `--issues` and `--changes` name them, `--out` sets the file. No model is called.
+
+## Try it on your own recipes
+
+Any PDF, image or text file works: put it anywhere and pass its path (in quotes if it has spaces). Keep the results inside `data/`, so a recipe from a book never ends up in git:
+
+```powershell
+python -m cookbook.extract "C:\path\to\my recipe.pdf" --structure --out data/my_tests
+```
+
+What to expect:
+- **Supported:** PDFs that are scanned or photographed, typed, or a mix; images (PNG, JPEG, GIF, TIFF, WebP), read like a scanned page; plain text files in any language (used as they are, no reading call). Any other kind of file is refused. The recipe can be in any language; amounts are checked in German, English and Portuguese (see [extract.md](extract.md)).
+- **One recipe per file.** A PDF with a whole cookbook would be merged into one wrong recipe. Pick the pages of one recipe with `--pages`, for example `--pages 12,13`.
+- **Calls and time.** A typed page needs only the structuring call (about 4 seconds). A scanned page is read by two models, then one structuring call is made (about 40 seconds for the two Sauerbraten pages the first time, under a second from the cache).
+- **Privacy.** Scanned pages (as images) and the transcript text are sent to Google. Free-tier prompts may be used for training in some regions, so do not use documents you must keep private.
+
+How to check a result. Open the files in the output folder in this order:
+1. **The console summary.** The agreement of each scanned page and each flag: a word or number the two models read differently.
+2. **`.transcript.txt`.** Read it against the page. Everything after this depends on it, and it is the one place the checks cannot verify, because they compare the recipe with the transcript, not with the page.
+3. **`.recipe.json`.** Compare it with the page: amounts and units, which ingredients are optional, the order and separation of the steps, the tools, the servings. Each item has a `quote` and the `lines` it came from.
+4. **`.issues.json`.** The problems the checks found, most serious first. `refers_to` is the ingredient ("i3"), tool, step or transcript line; [extract.md](extract.md) lists what each code means.
+
+What the checks cannot see, so look for it yourself: an ingredient the model never listed (only numbers are checked), a wrongly optional or non-optional ingredient, two steps merged into one, missing tools, and servings that are guessed.
+
+If something goes wrong:
+- `error: No Gemini API key found`: create `.env` as described under Setup.
+- A 404 for a model: its name was retired. Run `python -m cookbook.extract --list-models` and set `GEMINI_MODEL` in `.env`.
+- A 503: the command retries and may switch to a fallback model by itself; the summary says when it did.
+- `error: the model's answer is not a valid recipe`: the model returned something invalid twice in a row. Run the command again.
 ## Tests
 
 ```powershell
