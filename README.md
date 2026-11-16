@@ -11,9 +11,9 @@ Built for the finlyt engineering case study. Stages: **ingest, extract, manipula
 | Extract | Transcribes pages with two vision models and flags where they disagree, fills a structured recipe (ingredients, tools, steps, servings) and checks it | Built | [extract.md](extract.md) |
 | Manipulate | Change servings, make vegan; combinable, in a fixed order, every change logged with its reason | Built | [manipulate.md](manipulate.md) |
 | Web page | Upload, check the text, check the recipe, change it | Built | [web.md](web.md) |
-| Output | Step-by-step recipe, changes against the original | Not started | |
+| Output | The recipe as a cook reads it: ingredients and steps as they are now, servings with how sure they are, what replaced what, what to check; Markdown | Built | [output.md](output.md) |
 
-Not built yet: the output renderers, `examples/` and `AI_LOG.md`.
+Not built yet: `examples/` and `AI_LOG.md`.
 
 ## Setup
 
@@ -206,6 +206,14 @@ python -m cookbook.manipulate data/my_tests/pancakes_gemini-3.1-flash-lite.recip
 
 It writes `<name>.servings6.recipe.json` and `<name>.servings6.changes.json` next to the recipe, and prints what changed, what was left alone and why, and what to check by hand. If the recipe does not state its servings, the base is the model's estimate (flagged in the output); give the real number with `--base-servings 4`. Amounts scale by the kind of ingredient (seasonings grow more slowly than the rest, and vague amounts such as "a little" are kept), are rounded to values a kitchen uses, and the amounts written inside the steps are updated too.
 
+### Output (the recipe for a cook)
+
+```powershell
+python -m cookbook.output data/my_tests/pancakes_gemini-3.1-flash-lite.vegan.servings6.recipe.json
+```
+
+Writes `<name>.md` next to the recipe: the title, how many it serves and how sure that is (stated, estimated, or scaled from a number that may itself have been a guess), the ingredients and tools, the numbered steps, and a "check before cooking" list. An ingredient that replaces another says so ("Seitan (replaces Braten)"), an amount the source never gives says "amount not given", and the items with an open warning carry a ⚠. It finds the change log (`<name>.changes.json`) and the original's `<name>.issues.json` next to the recipe by itself; `--issues` and `--changes` name them explicitly. Headings are in the recipe's language (German, English, Portuguese). See [output.md](output.md).
+
 ### The web page
 
 ```powershell
@@ -284,12 +292,15 @@ src/cookbook/
                  CLI in __main__.py
   manipulate/    scaling.py (the servings rule), engine.py (rules in a fixed order), changes.py (the log),
                  CLI in __main__.py
+  output/        render.py (the recipe as Markdown for a cook), CLI in __main__.py
   web/           app.py (routes), jobs.py (reading runs as a job), static/ (the page: plain HTML, CSS, JS)
   llm.py         the only module that talks to a model provider (Gemini client, cache)
 tests/           offline tests
 evals/           scripts for comparing models on degraded scans
 ingest.md        how the ingest stage works, step by step
 extract.md       plan and decisions for the extract stage
+manipulate.md    how servings and vegan work, and their limits
+output.md        what the cook's recipe contains and why
 web.md           how the web page works
 .env.example     template for the API key
 ```

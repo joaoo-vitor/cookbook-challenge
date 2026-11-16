@@ -17,6 +17,7 @@ The page holds the transcript and the recipe and sends them back with every requ
 | `GET /api/jobs/{id}/page/{n}.jpg` | the original page, so text can be compared with it |
 | `POST /api/structure` | the second model fills the recipe schema from the transcript |
 | `POST /api/check` | checks an edited recipe against the transcript again (plain code, no model) |
+| `POST /api/render` | the recipe, the open issues and the change log as Markdown for a cook (no model) |
 | `POST /api/manipulate` | makes the recipe vegan (the primary model writes the new words, code checks them) and/or changes the servings |
 
 Only reading is a job, because two models per page take seconds. Jobs and uploaded files live in memory and in a temp folder; the last five are kept and everything is removed when the server stops.
@@ -34,6 +35,10 @@ In both steps a warning goes away when the person says they checked it, and *Res
 - **Recipe step:** each issue, in the side panel and under its item, has a **✓ Check** button. Checked issues are hidden and counted ("3 checked"). They are remembered by code, item and message, so *Re-check* does not bring back one that is still the same. Building the recipe again from the text starts clean.
 
 Checking a warning only hides it on the page: the recipe and its issues are unchanged, and nothing is sent to the server.
+
+## Preview and download
+
+**Preview recipe** (steps 2 and 3, and after applying) opens a pop-up with the recipe as a cook would read it, with **Download .md**. In step 3 it shows the changed recipe once the changes are applied, and the edited recipe before that. The page sends the recipe, the issues you did not check off, and the change log to `POST /api/render`, which uses the same renderer as `python -m cookbook.output` and needs no model. The Markdown only uses headings, lists, bold and italic, so a few lines of JavaScript show it, and everything is put on the page as text, never as HTML. See [output.md](output.md).
 
 ## Safety and limits
 
