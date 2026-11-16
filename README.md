@@ -9,6 +9,7 @@ Built for the finlyt engineering case study. Stages: **ingest, extract, manipula
 - [Challenges and decisions per stage](#challenges-and-decisions-per-stage)
 - [The AI challenges](#the-ai-challenges)
 - [What I would do with another week](#what-i-would-do-with-another-week)
+- [AI_LOG.md](AI_LOG.md): how the code was written with an AI agent, and where the agent was wrong
 
 ## Setup
 
