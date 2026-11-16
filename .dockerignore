@@ -1,0 +1,16 @@
+# Nothing private and nothing the image does not need goes into the build.
+.env
+.git
+.venv
+.cache
+data
+*.pdf
+Recipe.pdf
+tests
+evals
+.claude
+.pytest_cache
+__pycache__
+*.egg-info
+ARCHITECTURE.md
+finlyt*

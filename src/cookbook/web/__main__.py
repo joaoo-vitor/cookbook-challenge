@@ -11,6 +11,9 @@ import webbrowser
 def main() -> int:
     ap = argparse.ArgumentParser(description="Start the Cookbook Challenge page on this computer.")
     ap.add_argument("--port", type=int, default=8000)
+    ap.add_argument("--host", default="127.0.0.1",
+                    help="the address to listen on. Keep the default on your own computer; inside a container "
+                         "it has to be 0.0.0.0, and the port is then published only on 127.0.0.1 (see docker-compose.yml)")
     ap.add_argument("--no-browser", action="store_true", help="do not open the page in the browser")
     args = ap.parse_args()
 
@@ -26,9 +29,11 @@ def main() -> int:
     load_env()
     url = f"http://127.0.0.1:{args.port}"
     print(f"Cookbook Challenge: {url}  (Ctrl+C to stop)")
-    if not args.no_browser:
+    if args.host not in ("127.0.0.1", "localhost", "::1"):
+        print(f"listening on {args.host}: anyone who can reach this address can use the page and your API key")
+    elif not args.no_browser:
         webbrowser.open(url)
-    uvicorn.run(create_app(), host="127.0.0.1", port=args.port, log_level="warning")
+    uvicorn.run(create_app(), host=args.host, port=args.port, log_level="warning")
     return 0
 
 

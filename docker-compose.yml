@@ -1,0 +1,20 @@
+# docker compose up   ->   http://127.0.0.1:8000
+# Needs a .env file next to this one with GEMINI_API_KEY (copy .env.example).
+services:
+  web:
+    build: .
+    # Published on this computer only: the page can use your API key, so it must not be reachable
+    # from the network.
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file: .env
+    volumes:
+      - cache:/app/.cache  # model answers: a page read once is free to read again, also after a restart
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  cache:

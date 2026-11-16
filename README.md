@@ -66,6 +66,20 @@ It opens http://127.0.0.1:8000 (this computer only; `--port` changes it, `--no-b
 
 The page opens without a key, and says so as soon as a model is needed: reading a file and every later step need the key from Setup.
 
+### Run with Docker instead
+
+If you have Docker and would rather not set up Python, the web page can run in a container. You need only the key:
+
+```powershell
+Copy-Item .env.example .env
+# edit .env and set GEMINI_API_KEY=
+docker compose up
+```
+
+Then open http://127.0.0.1:8000. The first run builds the image. The key is not baked into it: Compose passes `.env` in when the container starts, and `.dockerignore` keeps `.env`, `data/`, PDFs and `.git` out of the build. The port is published on `127.0.0.1` only, so the page, which can use your key, is not reachable from the network. Model answers are cached in a Docker volume (`cache`), so a page read once is free to read again, also after a restart; `docker compose down -v` removes it. Stop with Ctrl+C, or `docker compose down`.
+
+Only the web page runs this way. The stage commands below (`python -m cookbook.extract` and the others) run from the virtual environment of Setup, where they read files from your folder and write into `data/`. In the container you upload through the page and download from the page.
+
 ## Running each stage
 
 Each stage can be run on its own, for example to inspect one step, to produce the files of a run, or to script the pipeline. Each stage's own document ([ingest.md](ingest.md), [extract.md](extract.md), [manipulate.md](manipulate.md), [output.md](output.md)) explains how it works; this section only says how to run it. The results go into `data/`, which is gitignored.
