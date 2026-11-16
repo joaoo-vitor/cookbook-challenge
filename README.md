@@ -118,39 +118,40 @@ tests/           offline tests          evals/   scripts to compare models on de
 
 ## Challenges and decisions per stage
 
-Each stage: what makes it hard, what I chose, what I considered and rejected. Specific to the Sauerbraten (*Großmutter Josefines handgeschriebenes Kochbuch, Anno 1887*) unless said otherwise.
+Each stage: what makes it hard, what I chose, what I considered and rejected. Considering the tested documents and mainly the given German recipe "Sauerbraten".
 
 ### Ingest
 
-**What makes it hard.** Both pages are photos: no text layer, one image covering 100% of the page. Handwriting, drawings with labels inside them (jars marked "Rosinen", "Korinthen", "Rotwein"), a sentence that runs across the page break, and line-end hyphens ("Bra-" / "tenstücke"). And a PDF can hide a bad OCR layer that looks like text.
-**What I chose.** Decide per page, from signals, whether to use the text layer, an OCR layer, or a vision model; send scans to vision. Drawings are read with the page and come back as `[drawing]` lines, treated as repeats of ingredients, not new ones. The pages are joined into one transcript whose line ids run across the break. Images are rendered as JPEG at the photo's own resolution (a fixed 200 dpi made a 41 MB PNG and a 15 to 75 second call; a 1 MB JPEG takes 3 to 6 seconds).
-**Rejected.** Trusting any text layer; counting a big image as proof of OCR; running the PDF library over a text file (it re-wraps lines, so line ids stop matching); cutting regions out of a scan.
+**What makes it hard.** I found out that pages could have mixed types (all text, all image, or both in the same page - it could be half a selectable text half a image of a text). Even when the page is considered as text, there could be small images whose text should be extracted, if it exists (and the text should be added to the transcription based on the position on extraction part). And a PDF can hide a bad OCR layer that looks like text.
+
+**What I chose.** The decision of routing should be done to each page, using signals (clues) to check what type of page it is: whether to use the text layer, an OCR layer, or a vision model; send scans to vision. Drawings are read with the page and come back as `[drawing]` lines, treated as repeats of ingredients, not new ones. The pages are joined into one transcript whose line ids run across the break. Images are rendered as JPEG at the photo's own resolution (a fixed 200 dpi made a 41 MB PNG and a 15 to 75 second call; a 1 MB JPEG takes 3 to 6 seconds).
+
+**Rejected.** Trusting any text layer; counting a big image as proof of OCR; cutting regions out of a scan.
+
 **Not solved.** A text layer with a broken font mapping that still looks like words: my own strogonoff test PDF, exported from LibreOffice, lost its accents ("ingl s" for "inglês") and was read as typed text. See [ingest.md](ingest.md).
 
 ### Extract
 
 **What makes it hard.**
-- *Reading.* Models misread cursive: one wrote "Josefs" for "Josefines", "Mühren" for "Möhren" and "Bratentond" for "Bratenfond" (a word the first model got right). On an illegible copy one model wrote 25 lines of plausible text with no warning and "1884" for 1887.
+- *Reading.* LLMs don't have calibrated confidence levels. Models misread cursive: one wrote "Josefs" for "Josefines", "Mühren" for "Möhren" and "Bratentond" for "Bratenfond" (a word the first model got right). On an illegible copy for testing one model wrote 25 lines of plausible text with no warning and "1884" for 1887. Besides that, there were some tested documents that had more than one column of text, and each model would read it in a different way.
 - *Quantities the recipe never gives.* Pfeffer, Nelken, Salz, Lorbeerblätter, Speck, Butter, Mehl, Rotwein have no amount; "einige Äpfel" and "soviel Zucker" are vague.
 - *Ingredient, tool, optional.* "Auch kann man einige Äpfel, Möhren und Wacholderbeeren in den Topf geben" makes three ingredients optional; the pot is the only named tool; "Essigwasser" is a mixture of two listed ingredients and "Bratenfond" is pan juices, neither an ingredient on its own.
 - *The same ingredient twice.* Essig and Wasser appear in the ingredient list and again in four steps; steps 2 and 4 use the "Essigwasser".
 - *Servings.* The recipe never says. Also two steps with different times ("nach dem 1. Tag oder 2. Tag", "nach 8 Tagen") that a first run merged into one.
 
 **What I chose.**
-- Two different models read each page and plain code compares them, because disagreement catches a wrong reading that a single model would state with confidence. Where the two disagree the word is flagged and a person decides; a page where they mostly disagree is marked unreliable.
+- At first, I thought of a sign to mark a word that the model didn't understand, such as `[?word?]`, but the model would use it very rarely, and it would make mistakes with confidence.
+- Instead, two different models read each page and plain code compares them, because a disagreement catches a wrong reading that a single model would state with confidence. Where the two disagree the word is flagged and a person decides; a page where they mostly disagree is marked unreliable.
 - An amount is either read (its words are kept in `quantity_text`) or null, never made up; a vague one is kept as written.
 - Every extracted value carries a quote and line ids, and plain code checks it against the transcript: a quote not found is `unsupported_quote` (high), a number on a line that nothing extracted contains is `uncovered_number`, an amount that does not match its words is `quantity_mismatch`. Optional is true only when the text presents the ingredient as something you may leave out. Servings: the model gives an estimate with its reasoning and `stated: false`; every later stage shows it as an estimate.
-- The comparison is order-tolerant: a block of words that only moved (a column read row by row by one model and column by column by the other) agrees, and the page is reported as `reading order differs`.
+- The comparison is order-tolerant: a block of words that only moved (a column read row by row by one model and column by column by the other) agrees, and the page is reported as `reading order differs`. The prompt also tells the models to read one column completely before the next, but they did not always follow it.
 
 **Rejected.**
-- Dedicated OCR engines (printed-document benchmarks say nothing about cursive German).
+- Dedicated OCR engines (using OCR for cursive text isn't reccomended).
 - Running a model locally (no GPU) or Hugging Face's hosted models (free credit uncertain); the Gemini free tier worked at once.
 - The model's own `[?word?]` marker as confidence: on readable pages no model wrote one, even when wrong.
-- One model reading twice.
-- A third reader to settle disagreements (the reviewer decides instead).
-- Named-entity recognition.
-- A per-value confidence score from the model.
-- Guessing a quantity or the servings silently.
+- A third reader to settle disagreements (the reviewer - human - decides instead).
+- Named-entity recognition (NER) - it was a first idea I had to see which word represents what (ingredient, tool, step), but the LLM got it without this help.
 
 Details and the evidence: [extract.md](extract.md).
 
@@ -173,8 +174,11 @@ Details and the evidence: [extract.md](extract.md).
 ### Output
 
 **What makes it hard.** The cook must know which parts were read and which were guessed, and what to do when the program is not sure, and a downloaded file has lost the page that explained it.
+
 **What I chose.** Four markers stay with the recipe: the servings line ("4 Portionen (geschätzt)", "6 Portionen, umgerechnet von 4 (4 war eine Schätzung)"); an ingredient that replaces another ("Seitan (ersetzt Braten)"); an amount the source never gives ("Pfeffer (Menge nicht angegeben)", never an invented one); and a ⚠ on every item with an open high or medium warning, with a "check before cooking" list at the end. The reviewer decides what reaches the cook: a warning they checked off in the page is not sent. Headings follow the recipe's language.
+
 **Rejected.** A "what changed" section in the cook's file (the page shows the log); a confidence number per line; hiding warnings from the cook.
+
 Details: [output.md](output.md).
 
 ## The AI challenges
@@ -216,7 +220,6 @@ In production I would move more to code and cheaper models: the language and uni
 7. **Vegan with a choice.** Let the user pick another stand-in (a gluten-free one instead of seitan), adapt cooking times to the stand-in, and take the table from a food database. Show with a test that the two orders of the rules give the same recipe.
 8. **For the cook.** A shopping list, unit conversion, the check list in the recipe's language, a print layout.
 9. **Orchestration.** The pipeline is a line of stages, so it maps directly onto a graph (for example LangGraph) with a human-in-the-loop node at each review step.
-
 
 ## Running each stage
 
@@ -310,6 +313,7 @@ If something goes wrong:
 - A 404 for a model: its name was retired. Run `python -m cookbook.extract --list-models` and set `GEMINI_MODEL` in `.env`.
 - A 503: the command retries and may switch to a fallback model by itself; the summary says when it did.
 - `error: the model's answer is not a valid recipe`: the model returned something invalid twice in a row. Run the command again.
+
 ## Tests
 
 ```powershell
