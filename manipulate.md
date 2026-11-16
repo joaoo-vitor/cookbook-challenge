@@ -30,6 +30,15 @@ What it changes: an ingredient's `name` and `name_en`; its amount, unit, optiona
 
 On the real Sauerbraten: Speck becomes Räuchertofu, Butter vegane Butter, Braten Seitan; the five steps that named them are rewritten with their numbers unchanged; "Bratenfond" in step 7 becomes "Sud", reported as a derived word; Essig, Wasser, Rotwein and Zucker stay.
 
+## Considered and rejected
+
+- **Making it vegan with the model alone.** A model would rewrite a step well and also invent: add an ingredient, change "8 Tagen", or leave "Bratenfond" in a recipe it called vegan. It names the words and rewrites; code decides what is accepted.
+- **Making it vegan with a table alone.** A table cannot know every ingredient (Gruyère, an unusual sauce) and cannot rewrite German ("den Speck auslassen" does not fit smoked tofu). The table has the last word on what is animal; the model fills in what it does not know and writes the sentences.
+- **Replacing the old word in the step by code.** It always produces something, but German endings and cooking verbs come out wrong. When the rewrite fails its checks the step is kept as written with a high warning instead.
+- **Letting the order of the rules change the result.** "Vegan then 6" and "6 then vegan" are the same call by design. The alternative, running them in the order asked, would let the scaling class of an ingredient depend on its stand-in, and the model see different numbers. The cost of the fixed order is that the other order is never run, so equality is by construction and not demonstrated; a test that runs both orders with a deterministic fake model would show it, and is not written.
+- **Scaling everything linearly.** Salt and spices (factor^0.8), whole items (rounded), vague amounts ("soviel Zucker", unchanged) and times (kept, with a reminder to check for doneness; the Sauerbraten marinates 8 days whatever the amount) do not scale in proportion, and the pot may no longer fit.
+- **Guessing the servings silently.** The Sauerbraten never says how many it serves. The model estimates 4 with its reasoning and everything downstream is marked as resting on an estimate; the user can give the real number.
+
 ## Decisions and limits
 
 - Wine, beer, sugar and vinegar are not treated (only clearly animal ingredients), by decision. A strict vegan should still check labels.
