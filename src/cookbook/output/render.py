@@ -52,8 +52,8 @@ def _escape(text: str) -> str:
     return re.sub(r"([\\*_])", r"\\\1", " ".join(text.split()))
 
 
-def _amount(ing: Ingredient, language: str | None, L: dict[str, str]) -> str:
-    """"2 EL", "1/2 l", "1 a 2 colheres", a vague amount as written, or that none is given."""
+def _amount(ing: Ingredient, language: str | None) -> str | None:
+    """"2 EL", "1/2 l", "1 a 2 colheres", a vague amount as written, or None when the source gives none."""
     unit = ing.unit or ""
     text = ing.quantity_text
     if ing.quantity is not None:
@@ -61,7 +61,7 @@ def _amount(ing: Ingredient, language: str | None, L: dict[str, str]) -> str:
         if not (text and parsed and parsed.value is not None and abs(parsed.value - ing.quantity) <= 0.01 * max(1.0, abs(ing.quantity))):
             text = format_amount(ing.quantity, language)  # no text, or the amount was changed after it was read
     elif not text:
-        return L["no_amount"]
+        return None
     if unit and fold(text or "").endswith(fold(unit)):
         unit = ""  # the words already include the unit
     return f"{text} {unit}".strip()
@@ -117,10 +117,11 @@ def render_markdown(recipe: Recipe, *, issues: Iterable[Issue] = (), changes: It
     if recipe.ingredients:
         out += [f"## {L['ingredients']}", ""]
         for ing in recipe.ingredients:
-            text = f"{_amount(ing, recipe.language, L)} {_escape(ing.name)}"
+            amount = _amount(ing, recipe.language)
+            text = f"{amount} {_escape(ing.name)}" if amount else _escape(ing.name)
             if ing.prep_note:
                 text += f", {_escape(ing.prep_note)}"
-            marks = ([L["optional"]] if ing.optional else []) + \
+            marks = ([L["no_amount"]] if amount is None else []) + ([L["optional"]] if ing.optional else []) + \
                     ([L["replaces"].format(name=_escape(replaced[ing.id]))] if ing.id in replaced else [])
             out.append(f"- {text}" + (f" ({', '.join(marks)})" if marks else "") + (f" {WARN}" if ing.id in flagged else ""))
         out.append("")
@@ -138,7 +139,8 @@ def render_markdown(recipe: Recipe, *, issues: Iterable[Issue] = (), changes: It
     if notes:
         out += [f"## {WARN} {L['check']}", ""]
         for severity, target, text in notes:
-            what = names.get(target) or (f"{L['step']} {target[5:]}" if target.startswith("step ") else target)
+            what = "" if target == "recipe" else names.get(target) or (
+                f"{L['step']} {target[5:]}" if target.startswith("step ") else target)
             out.append(f"- **{L[severity]}**" + (f" · {_escape(what)}" if what else "") + f": {_escape(text)}")
         out.append("")
     return "\n".join(out)

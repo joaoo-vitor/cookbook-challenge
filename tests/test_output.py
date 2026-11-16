@@ -80,11 +80,13 @@ def test_the_decimal_comma_follows_the_language():
 
 def test_a_missing_amount_is_said_and_a_vague_one_is_shown_as_written():
     md = render_markdown(_recipe())
-    assert "- Menge nicht angegeben Salz" in md  # never an invented amount
+    assert "- Salz (Menge nicht angegeben)" in md  # never an invented amount
     assert "- etwas Paprika" in md
     recipe = _recipe()
     recipe.language = "en"
-    assert "- amount not given Salz" in render_markdown(recipe)
+    assert "- Salz (amount not given)" in render_markdown(recipe)
+    recipe.ingredients[3].optional = True
+    assert "- Salz (amount not given, optional)" in render_markdown(recipe)
 
 
 def test_a_range_is_kept_and_an_amount_typed_over_the_text_wins():
@@ -149,6 +151,11 @@ def test_change_warnings_count_and_a_warning_without_a_level_is_medium():
     assert "estimate" not in check and "left as written" in check
     assert "- Topf ⚠" in md and "1. Das Fleisch in Würfel schneiden ⚠" in md
     assert check.index("hoch") < check.index("mittel")
+
+
+def test_a_warning_about_the_whole_recipe_has_no_item_name():
+    note = Change(rule="make_vegan", kind="warning", severity="medium", target="recipe", field="stand-ins", reason="taste and adjust")
+    assert "- **mittel**: taste and adjust" in render_markdown(_recipe(), changes=[note])
 
 
 def test_there_is_no_check_list_when_nothing_is_open():
