@@ -7,7 +7,7 @@ Built for the finlyt engineering case study. Stages: **ingest, extract, manipula
 
 | Stage | What it does | Status | Guide |
 |---|---|---|---|
-| Ingest | Decides, per PDF page, how to read it (text layer, OCR layer, or vision model) | Built (PDF only) | [ingest.md](ingest.md) |
+| Ingest | Detects what came in (PDF, image or plain text, by its first bytes) and decides, per page, how to read it (text layer, OCR layer, or vision model) | Built | [ingest.md](ingest.md) |
 | Extract | Transcribes pages with two vision models and flags where they disagree, fills a structured recipe (ingredients, tools, steps, servings) and checks it | Built | [extract.md](extract.md) |
 | Manipulate | Change servings, make vegan; combinable, in a fixed order, every change logged with its reason | Built | [manipulate.md](manipulate.md) |
 | Web page | Upload, check the text, check the recipe, change it | Built | [web.md](web.md) |
