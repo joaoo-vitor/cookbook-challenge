@@ -23,7 +23,9 @@ from cookbook.extract.transcript import Transcript, build_transcript
 from cookbook.manipulate.engine import manipulate
 from cookbook.manipulate.scaling import NeedsBaseServings
 from cookbook.manipulate.vegan import VeganError
-from cookbook.models import Recipe
+from cookbook.manipulate.changes import Change
+from cookbook.models import Issue, Recipe
+from cookbook.output import render_markdown
 
 from .jobs import Jobs, describe_pages
 
@@ -57,6 +59,12 @@ class StructureRequest(BaseModel):
 class CheckRequest(BaseModel):
     transcript: dict
     recipe: Recipe
+
+
+class RenderRequest(BaseModel):
+    recipe: Recipe
+    issues: list[Issue] = []  # the ones still open: the page leaves out those the person checked off
+    changes: list[Change] = []  # the log of the manipulations, if any were applied
 
 
 class ManipulateRequest(BaseModel):
@@ -161,6 +169,10 @@ def create_app(make_readers=default_readers) -> FastAPI:
         except Exception as e:  # noqa: BLE001 - a provider error while the model wrote the new steps
             raise HTTPException(502, f"{type(e).__name__}: {str(e)[:300]}") from e
         return result
+
+    @app.post("/api/render")
+    def render(req: RenderRequest):
+        return {"markdown": render_markdown(req.recipe, issues=req.issues, changes=req.changes)}
 
     @app.get("/")
     def index():

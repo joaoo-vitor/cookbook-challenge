@@ -540,11 +540,12 @@ function recipeStep() {
       side),
     h('div', { class: 'actions' },
       h('button', { class: 'btn', onclick: recheck }, 'Re-check my changes'),
+      h('button', { class: 'btn', onclick: () => openPreview(false) }, 'Preview recipe'),
       h('button', { class: 'btn primary', onclick: () => { S.maxStep = Math.max(S.maxStep, 3); S.step = 3; S.error = null; render(); } }, 'The recipe is OK → change it')));
 }
 
 function field(label, control) { return h('div', {}, h('label', { class: 'small' }, label), control); }
-function dirty() { S.recipeDirty = true; }
+function dirty() { S.recipeDirty = true; S.manip = null; }  // a change after the manipulations makes their result out of date
 
 async function recheck() {
   S.error = null; S.busy = 'Checking the recipe against the text…'; render();
@@ -578,7 +579,8 @@ function manipulateStep() {
     h('h3', { class: 'sec' }, 'Order'),
     h('ol', { class: 'order' }, h('li', {}, 'Make it vegan'), h('li', {}, 'Change the servings')),
     h('p', { class: 'hint' }, 'The order is fixed. Making a recipe vegan keeps each ingredient’s kind (a seasoning stays a seasoning), so the result is the same whichever you ask for first.'),
-    h('div', { class: 'actions' }, h('button', { class: 'btn primary', onclick: applyManip }, 'Apply')));
+    h('div', { class: 'actions' }, h('button', { class: 'btn primary', onclick: applyManip }, 'Apply'),
+      h('button', { class: 'btn', onclick: () => openPreview(true) }, 'Preview recipe')));
 
   return h('div', {}, form, S.manip ? manipResult() : null);
 }
@@ -627,7 +629,10 @@ function manipResult() {
       h('div', { class: 'compare', style: 'margin-top:12px' },
         h('div', {}, h('h3', { class: 'sec' }, 'Original' + (m.base_servings != null ? ` (${m.base_servings})` : '')), table(before, false), h('h3', { class: 'sec' }, 'Steps'), steps(before, false)),
         h('div', {}, h('h3', { class: 'sec' }, 'New' + (m.target_servings != null ? ` (${m.target_servings})` : '')), table(m.recipe, true), h('h3', { class: 'sec' }, 'Steps'), steps(m.recipe, true))),
-      h('div', { class: 'actions' }, h('button', { class: 'btn', onclick: download }, 'Download as JSON'))),
+      h('div', { class: 'actions' },
+        h('button', { class: 'btn primary', onclick: () => openPreview(true) }, 'Preview recipe'),
+        h('button', { class: 'btn', onclick: () => downloadMarkdown(true) }, 'Download as Markdown'),
+        h('button', { class: 'btn', onclick: download }, 'Download as JSON'))),
     h('div', { class: 'panel' },
       h('h2', {}, 'What was done and why'),
       h('p', { class: 'hint' }, `${counts.changed} changed, ${counts.unchanged} left as they are, ${counts.warning} to check by hand.`),
@@ -638,6 +643,93 @@ function download() {
   const m = S.manip;
   const blob = new Blob([JSON.stringify({ recipe: m.recipe, changes: m.changes, base_servings: m.base_servings, target_servings: m.target_servings, base_is_estimate: m.base_is_estimate }, null, 2)], { type: 'application/json' });
   const a = h('a', { href: URL.createObjectURL(blob), download: `recipe${m.rules.includes('make_vegan') ? '.vegan' : ''}${m.target_servings != null ? '.servings' + m.target_servings : ''}.json` });
+  document.body.append(a); a.click(); a.remove();
+}
+
+// ---------------------------------------------------------------- the cook's recipe: preview and download
+// The Markdown is written by the server (one renderer for the page, the command line and the examples).
+// It only uses headings, lists, **bold**, _italic_ and \ escapes, and this is all the page has to read.
+// Everything is put on the page as text nodes, never as HTML.
+function findClose(text, mark, from) {
+  for (let j = from; j < text.length; j++) {
+    if (text[j] === '\\') { j++; continue; }
+    if (text.startsWith(mark, j)) return j;
+  }
+  return -1;
+}
+
+function inline(text) {
+  const nodes = [];
+  let buf = '';
+  const flush = () => { if (buf) { nodes.push(buf); buf = ''; } };
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '\\' && i + 1 < text.length) { buf += text[++i]; continue; }
+    if (text.startsWith('**', i)) {
+      const end = findClose(text, '**', i + 2);
+      if (end > 0) { flush(); nodes.push(h('strong', {}, inline(text.slice(i + 2, end)))); i = end + 1; continue; }
+    }
+    if (ch === '_') {
+      const end = findClose(text, '_', i + 1);
+      if (end > 0) { flush(); nodes.push(h('em', {}, inline(text.slice(i + 1, end)))); i = end; continue; }
+    }
+    buf += ch;
+  }
+  flush();
+  return nodes;
+}
+
+function renderMarkdown(md) {
+  const out = [];
+  let list = null;
+  const listOf = (tag) => { if (!list || list.tagName !== tag) { list = h(tag.toLowerCase()); out.push(list); } return list; };
+  for (const line of md.split('\n')) {
+    let m;
+    if ((m = /^(#{1,2}) (.*)$/.exec(line))) { list = null; out.push(h(m[1].length === 1 ? 'h1' : 'h2', {}, inline(m[2]))); }
+    else if ((m = /^- (.*)$/.exec(line))) listOf('UL').append(h('li', {}, inline(m[1])));
+    else if ((m = /^(\d+)\. (.*)$/.exec(line))) listOf('OL').append(h('li', { value: m[1] }, inline(m[2])));
+    else if (line.trim() === '') list = null;
+    else { list = null; out.push(h('p', {}, inline(line))); }
+  }
+  return out;
+}
+
+// the recipe as it is now: the manipulated one if they were applied (and asked for), else the edited one
+async function renderCurrent(useChanges) {
+  const done = useChanges && S.manip ? S.manip : null;
+  const recipe = done ? done.recipe : S.recipe;
+  const res = await postJson('/api/render', { recipe, issues: visibleIssues(), changes: done ? done.changes : [] });
+  return { markdown: res.markdown, title: recipe.title };
+}
+
+async function openPreview(useChanges) {
+  S.error = null;
+  let shown;
+  try { shown = await renderCurrent(useChanges); }
+  catch (e) { S.error = e.message; render(); return; }
+  let dlg = document.getElementById('preview');
+  if (!dlg) {
+    dlg = h('dialog', { id: 'preview', class: 'preview', 'aria-label': 'The recipe, as a cook would read it' });
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });  // a click on the backdrop
+    document.body.append(dlg);
+  }
+  dlg.replaceChildren(
+    h('div', { class: 'preview-body' }, renderMarkdown(shown.markdown)),
+    h('div', { class: 'actions' },
+      h('button', { class: 'btn primary', onclick: () => saveFile(shown.markdown, shown.title, 'md', 'text/markdown') }, 'Download .md'),
+      h('button', { class: 'btn', onclick: () => dlg.close() }, 'Close')));
+  dlg.showModal();
+}
+
+async function downloadMarkdown(useChanges) {
+  S.error = null;
+  try { const shown = await renderCurrent(useChanges); saveFile(shown.markdown, shown.title, 'md', 'text/markdown'); }
+  catch (e) { S.error = e.message; render(); }
+}
+
+function saveFile(text, title, extension, type) {
+  const name = (title || 'recipe').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'recipe';
+  const a = h('a', { href: URL.createObjectURL(new Blob([text], { type: `${type};charset=utf-8` })), download: `${name}.${extension}` });
   document.body.append(a); a.click(); a.remove();
 }
 

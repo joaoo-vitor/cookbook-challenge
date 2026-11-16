@@ -165,6 +165,16 @@ h3.sec:first-child { margin-top: 0; }
 .servings input { width: 80px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
 .estimate { color: var(--medium); font-weight: 600; }
 
+/* the cook's recipe */
+.preview { width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 32px); border: 1px solid var(--line); border-radius: 14px; padding: 20px; background: var(--surface); color: var(--ink); }
+.preview::backdrop { background: rgba(0, 0, 0, .45); }
+.preview-body { max-height: calc(100vh - 150px); overflow: auto; padding-right: 6px; }
+.preview-body h1 { font-size: 1.5rem; margin: 0 0 6px; }
+.preview-body h2 { font-size: 1.05rem; margin: 18px 0 6px; color: var(--accent); }
+.preview-body p { margin: 0 0 8px; color: var(--muted); }
+.preview-body ul, .preview-body ol { margin: 0; padding-left: 22px; }
+.preview-body li { margin-bottom: 5px; }
+
 /* step 3: manipulate */
 .choice { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .choice:last-of-type { border-bottom: 0; }

@@ -232,6 +232,28 @@ def test_scaling_alone_calls_no_model_and_an_empty_request_is_refused():
     assert client.post("/api/manipulate", json={"recipe": _recipe().model_dump()}).status_code == 400
 
 
+def test_render_returns_the_recipe_as_markdown_without_a_model():
+    client, primary = _client()
+    issue = {"code": "x", "severity": "high", "message": "the amount is doubtful", "refers_to": "i1", "lines": []}
+    r = client.post("/api/render", json={"recipe": _recipe().model_dump(), "issues": [issue]})
+    assert r.status_code == 200
+    md = r.json()["markdown"]
+    assert md.startswith("# Rindergulasch") and "- 500 g Rindfleisch ⚠" in md and "the amount is doubtful" in md
+    assert primary.structured == 0
+
+
+def test_render_shows_what_the_manipulations_did():
+    client, _ = _client()
+    done = client.post("/api/manipulate", json={"recipe": _recipe().model_dump(), "servings": 8}).json()
+    r = client.post("/api/render", json={"recipe": done["recipe"], "changes": done["changes"]})
+    assert "umgerechnet von 4" in r.json()["markdown"] and "- 1000 g Rindfleisch" in r.json()["markdown"]
+
+
+def test_render_refuses_a_malformed_recipe():
+    client, _ = _client()
+    assert client.post("/api/render", json={"recipe": {"ingredients": "no"}}).status_code == 422
+
+
 def test_an_unreadable_vegan_answer_is_a_502_and_a_missing_key_a_503():
     client, _ = _client(primary=FakeReader("m1", READ, "not json"))
     assert client.post("/api/manipulate", json={"recipe": _recipe().model_dump(), "vegan": True}).status_code == 502
