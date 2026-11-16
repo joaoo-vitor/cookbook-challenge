@@ -165,22 +165,6 @@ It writes three more files per run, named `<pdf name>_<primary model>`:
 
 The summary lists the high and medium issues. If the model's answer is not valid JSON of the right shape it is asked once more with the error; after that the command stops with an error.
 
-You can also call it from Python:
-
-```python
-from cookbook.llm import GeminiClient
-from cookbook.extract import transcribe_pdf
-
-pages = transcribe_pdf(
-    "Recipe.pdf",
-    GeminiClient(model="gemini-3.1-flash-lite"),
-    second=GeminiClient(model="gemini-3.5-flash-lite"),  # leave out for a single read
-)
-print(pages[0].text)  # the transcript
-for c in pages[0].comparisons:
-    print(c.label, c.agreement, c.unreliable, c.flags)
-```
-
 ### Manipulate (vegan, servings)
 
 Takes the `.recipe.json` that extract wrote and changes it: `--servings N` for the number of servings, `--vegan` to make it vegan, or both. The rules always run in the same order (vegan, then servings), so the result does not depend on the order you ask for them.
@@ -263,7 +247,3 @@ All tests run offline: the PDFs are generated on the fly and the model is replac
 ## Comparing models
 
 The scripts in [evals/](evals/README.md) build degraded copies of the scan and score each model's transcript against a reference. See that file for the steps.
-
-## Debugging in VS Code
-
-Open the folder in VS Code and pick the `.venv` interpreter (Ctrl+Shift+P, "Python: Select Interpreter"). The Run and Debug panel then offers `Ingest: Recipe.pdf`, `Ingest: choose a PDF`, `Pytest: current file` and `Python: current file`.
